@@ -1,0 +1,33 @@
+{
+	"author": "pascal",
+	"info": "test sha256",
+	"param" : {
+		"iterations": 8
+	},
+	"data": [
+		{
+			"data": "directory",
+			"name": "work",
+			"type": "buffer",
+			"path": "data/sha256/input",
+			"access": "read",
+			"size": 1024
+		},
+		{
+			"data": "file",
+			"name": "nonce",
+			"type": "buffer",
+			"path": "data/sha256/output.dat",
+			"access": "write",
+			"size": 1024
+		}
+	],
+	"program": [
+		{
+			"name": "mining",
+			"shader": "data/sha256.spv",
+			"dispatch": [8388608, 1, 1]
+		}
+	]
+}
+

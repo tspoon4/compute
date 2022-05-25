@@ -1,0 +1,55 @@
+{
+	"author": "pascal",
+	"info": "test compute framework",
+	"param" : {
+		"iterations": 100
+	},
+	"data": [
+		{
+			"data": "file",
+			"name": "inputfile0",
+			"type": "buffer",				
+			"path": "data/test/input.dat",
+			"access": "read",
+			"size": 1048576
+		},
+		{
+			"data": "file",
+			"name": "outputfile0",
+			"type": "buffer",			
+			"path": "data/test/output.dat",
+			"access": "write",
+			"size": 1048576
+		},
+		{
+			"data": "directory",
+			"name": "inputdir0",
+			"type": "buffer",				
+			"path": "data/test/input",
+			"access": "read",
+			"size": 1048576
+		},
+		{
+			"data": "directory",
+			"name": "outputdir0",
+			"type": "buffer",			
+			"path": "data/test/output",
+			"access": "write",
+			"size": 1048576
+		},
+		{
+			"data": "memory",
+			"name": "temporary0",
+			"type": "buffer",			
+			"size": 1048576
+		}
+	],
+	"program": [
+		{
+			"name": "processing0",
+			"shader": "data/test.spv",
+			"dispatch": [64, 1, 1]
+		}
+	]
+}
+
