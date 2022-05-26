@@ -1,5 +1,5 @@
 {
-	"author": "pascal",
+	"author": "tspoon",
 	"info": "test compute framework",
 	"param" : {
 		"iterations": 100
@@ -8,10 +8,10 @@
 		{
 			"data": "file",
 			"name": "inputfile0",
-			"type": "buffer",				
+			"type": "buffer",
 			"path": "data/test/input.dat",
 			"access": "read",
-			"size": 1048576
+			"size": 1024
 		},
 		{
 			"data": "file",
@@ -19,7 +19,7 @@
 			"type": "buffer",			
 			"path": "data/test/output.dat",
 			"access": "write",
-			"size": 1048576
+			"size": 1024
 		},
 		{
 			"data": "directory",
@@ -27,7 +27,7 @@
 			"type": "buffer",				
 			"path": "data/test/input",
 			"access": "read",
-			"size": 1048576
+			"size": 1024
 		},
 		{
 			"data": "directory",
@@ -35,20 +35,25 @@
 			"type": "buffer",			
 			"path": "data/test/output",
 			"access": "write",
-			"size": 1048576
+			"size": 1024
 		},
 		{
 			"data": "memory",
 			"name": "temporary0",
 			"type": "buffer",			
-			"size": 1048576
+			"size": 1024
 		}
 	],
 	"program": [
 		{
-			"name": "processing0",
+			"name": "processing",
 			"shader": "data/test.spv",
-			"dispatch": [64, 1, 1]
+			"dispatch": [1, 1, 1]
+		},
+		{
+			"name": "processing2",
+			"shader": "data/test2.spv",
+			"dispatch": [1, 1, 1]
 		}
 	]
 }

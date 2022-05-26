@@ -1,29 +1,29 @@
 #version 450
-// glslangValidator shader.comp -V -q -e main -o shader.spv -DCOPYADD
+// glslangValidator shader.comp -V -q -e main -o shader.spv -DCOPY
 
 layout(binding = 0) readonly buffer inputfile0
 {
-    ivec4 matrices[];
+	ivec4 vectors[];
 } sourceFile;
 
 layout(binding = 1) buffer outputfile0
 {
-    ivec4 matrices[];
+	ivec4 vectors[];
 } outputFile;
 
 layout(binding = 2) readonly buffer inputdir0
 {
-    ivec4 matrices[];
+	ivec4 vectors[];
 } sourceDir;
 
 layout(binding = 3) buffer outputdir0
 {
-    ivec4 matrices[];
+	ivec4 vectors[];
 } outputDir;
 
 layout(binding = 4) buffer temporary0
 {
-    ivec4 matrices[];
+	ivec4 vectors[];
 } temporary;
 
 #ifdef COPY
@@ -31,8 +31,7 @@ layout (local_size_x = 64) in;
 void main() 
 {		
 	uint gID = gl_GlobalInvocationID.x;
-    outputDir.matrices[gID] = sourceDir.matrices[gID] + sourceFile.matrices[gID];
-	outputFile.matrices[gID] += sourceFile.matrices[gID];
+	temporary.vectors[gID] = sourceDir.vectors[gID];
 }
 #endif
 
@@ -41,7 +40,7 @@ layout (local_size_x = 64) in;
 void main() 
 {		
 	uint gID = gl_GlobalInvocationID.x;
-    outputDir.matrices[gID] = sourceDir.matrices[gID] + 1;
+	outputDir.vectors[gID] = temporary.vectors[gID] + sourceFile.vectors[gID];
 }
 #endif
 

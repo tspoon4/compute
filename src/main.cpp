@@ -954,6 +954,16 @@ int compileCompute(Compute *_compute, const cJSON *_json,
 			vkCmdDebugMarkerEnd(_graphicsCmdBuffers[0]);
 			vkCmdDebugMarkerEnd(_graphicsCmdBuffers[1]);
 		}
+
+		VkMemoryBarrier barrier;
+		memset(&barrier, 0, sizeof(VkMemoryBarrier));
+		barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		vkCmdPipelineBarrier(_graphicsCmdBuffers[0], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+								0, 1, &barrier, 0, 0, 0, 0);
+		vkCmdPipelineBarrier(_graphicsCmdBuffers[1], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+								0, 1, &barrier, 0, 0, 0, 0);
 	}
 
 	if(DEBUG_MARKERS)
@@ -991,7 +1001,7 @@ int main(int argc, char *argv[])
 
 	printf("cJSON version: %s\n", cJSON_Version());
 
-	FILE* file = fopen("data/sha256.json", "r");
+	FILE* file = fopen("data/test.json", "r");
 	if(file != 0)
 	{
 		char buffer[16*1024];
@@ -1093,6 +1103,7 @@ int main(int argc, char *argv[])
 				++graphicsSubmit.commandBufferCount;
 			}
 
+			// TODO check if semaphore is needed between the transfer and compute queue
 			vkWaitForFences(device, 1, &transferFences[lsb], VK_TRUE, UINT64_MAX);
 			vkResetFences(device, 1, &transferFences[lsb]);
 
