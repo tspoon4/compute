@@ -11,7 +11,7 @@
 			"type": "buffer",
 			"path": "data/sha256/input",
 			"access": "read",
-			"size": 1024
+			"size": 36
 		},
 		{
 			"data": "file",
@@ -19,7 +19,7 @@
 			"type": "buffer",
 			"path": "data/sha256/output.dat",
 			"access": "write",
-			"size": 1024
+			"size": 4
 		}
 	],
 	"program": [

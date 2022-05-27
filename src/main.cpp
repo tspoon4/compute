@@ -57,12 +57,17 @@ enum Access
 	Access_Count
 };
 
+struct Memory
+{
+	VkDeviceMemory memory;
+	VkDeviceSize offset;
+	VkDeviceSize alignment;
+	char *mapped;
+};
+
 struct Compute
 {
-	char *mapped[Access_Count] = {0};
-	VkDeviceMemory memory[Access_Count];
-	VkDeviceSize memoryOffset[Access_Count] = {0};
-
+	Memory memory[Access_Count];
 	std::vector<VkBuffer> buffers;
 	std::vector<VkPipeline> pipelines;
 	std::vector<VkShaderModule> shaderModules;
@@ -373,9 +378,11 @@ void ComputeDestroy(Compute *_compute)
 	for(VkFence &fence : _compute->fences)
 		vkDestroyFence(device, fence, 0);
 	for(int i = 0; i < Access_Count; ++i)
-		if(_compute->mapped[i]) vkUnmapMemory(device, _compute->memory[i]);
-	for(VkDeviceMemory &memory : _compute->memory)
-		vkFreeMemory(device, memory, 0);
+	{
+		if(_compute->memory[i].mapped)
+			vkUnmapMemory(device, _compute->memory[i].memory);
+		vkFreeMemory(device, _compute->memory[i].memory, 0);
+	}
 }
 
 VkBufferUsageFlags accessToBufferUsage(Access _access)
@@ -425,18 +432,22 @@ void allocateMemory(Compute *_compute, const cJSON *_jsonData)
 		bufferInfo.usage = accessToBufferUsage(Access(i));
 		vkCreateBuffer(device, &bufferInfo, 0, &buffer);
 		vkGetBufferMemoryRequirements(device, buffer, &memory);
+		vkDestroyBuffer(device, buffer, 0);
 
 		allocInfo.memoryTypeIndex = findProperties(&memoryProperties, memory.memoryTypeBits, accessToMemoryFlags(Access(i)));
 		//printf("Memory type chosen: %d\n", allocInfo.memoryTypeIndex);
-		vkAllocateMemory(device, &allocInfo, 0, &_compute->memory[i]);
-		vkDestroyBuffer(device, buffer, 0);
+
+		_compute->memory[i].mapped = 0;
+		_compute->memory[i].offset = 0;
+		_compute->memory[i].alignment = memory.alignment;
+		vkAllocateMemory(device, &allocInfo, 0, &_compute->memory[i].memory);
 	}
 
 	// Map CPU memory
-	vkMapMemory(device, _compute->memory[Access_CPU_Read], 0, VK_WHOLE_SIZE, 0, 
-					(void **) &_compute->mapped[Access_CPU_Read]); 
-	vkMapMemory(device, _compute->memory[Access_CPU_Write], 0, VK_WHOLE_SIZE, 0,
-					(void **) &_compute->mapped[Access_CPU_Write]); 
+	vkMapMemory(device, _compute->memory[Access_CPU_Read].memory, 0, VK_WHOLE_SIZE, 0, 
+					(void **) &_compute->memory[Access_CPU_Read].mapped);
+	vkMapMemory(device, _compute->memory[Access_CPU_Write].memory, 0, VK_WHOLE_SIZE, 0,
+					(void **) &_compute->memory[Access_CPU_Write].mapped); 
 }
 
 void allocateCommandBuffers(VkCommandPool _commandPool, uint32_t _count, VkCommandBuffer *_commandBuffers)
@@ -545,9 +556,13 @@ void createBuffer(Compute *_compute, VkDeviceSize _size, Access _access,
 	vkCreateBuffer(device, &bufferInfo, 0, _buffer);
 	_compute->buffers.push_back(*_buffer);
 
-	vkBindBufferMemory(device, *_buffer, _compute->memory[_access], _compute->memoryOffset[_access]);
-	*_offset = _compute->memoryOffset[_access];
-	_compute->memoryOffset[_access] += _size;
+	Memory *memory = _compute->memory + _access;
+	vkBindBufferMemory(device, *_buffer, memory->memory, memory->offset);
+	*_offset = memory->offset;
+
+	// Keep next offset aligned
+	VkDeviceSize asize = _size & (~(memory->alignment - 1));
+	memory->offset += (_size == asize) ? asize : asize + memory->alignment;
 
 	if(DEBUG_MARKERS)
 	{
@@ -647,7 +662,7 @@ void createAIOCommands(Compute *_compute, AIOCmdBuffer *_aioCmdBuffer, const std
 	{
 		if(workload.access == _access)
 		{
-			void *buffer = _compute->mapped[_access] + workload.offset[lsb];
+			void *buffer = _compute->memory[_access].mapped + workload.offset[lsb];
 			if(_access == Access_CPU_Write) 
 				aioCmdRead(_aioCmdBuffer, buffer, workload.files[_index].c_str(), workload.size);
 			else
