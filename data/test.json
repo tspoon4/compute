@@ -6,7 +6,7 @@
 	},
 	"data": [
 		{
-			"data": "file",
+			"source": "file",
 			"name": "inputfile0",
 			"type": "buffer",
 			"path": "data/test/input.dat",
@@ -14,7 +14,7 @@
 			"size": 1024
 		},
 		{
-			"data": "file",
+			"source": "file",
 			"name": "outputfile0",
 			"type": "buffer",			
 			"path": "data/test/output.dat",
@@ -22,7 +22,7 @@
 			"size": 1024
 		},
 		{
-			"data": "directory",
+			"source": "directory",
 			"name": "inputdir0",
 			"type": "buffer",				
 			"path": "data/test/input",
@@ -30,7 +30,7 @@
 			"size": 1024
 		},
 		{
-			"data": "directory",
+			"source": "directory",
 			"name": "outputdir0",
 			"type": "buffer",			
 			"path": "data/test/output",
@@ -38,7 +38,7 @@
 			"size": 1024
 		},
 		{
-			"data": "memory",
+			"source": "memory",
 			"name": "temporary0",
 			"type": "buffer",			
 			"size": 1024
@@ -47,12 +47,12 @@
 	"program": [
 		{
 			"name": "processing",
-			"shader": "data/test.spv",
+			"path": "data/test.spv",
 			"dispatch": [1, 1, 1]
 		},
 		{
 			"name": "processing2",
-			"shader": "data/test2.spv",
+			"path": "data/test2.spv",
 			"dispatch": [1, 1, 1]
 		}
 	]

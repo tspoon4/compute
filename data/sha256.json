@@ -6,7 +6,7 @@
 	},
 	"data": [
 		{
-			"data": "directory",
+			"source": "directory",
 			"name": "work",
 			"type": "buffer",
 			"path": "data/sha256/input",
@@ -14,7 +14,7 @@
 			"size": 36
 		},
 		{
-			"data": "file",
+			"source": "file",
 			"name": "nonce",
 			"type": "buffer",
 			"path": "data/sha256/output.dat",
@@ -25,7 +25,7 @@
 	"program": [
 		{
 			"name": "mining",
-			"shader": "data/sha256.spv",
+			"path": "data/sha256.spv",
 			"dispatch": [8388608, 1, 1]
 		}
 	]

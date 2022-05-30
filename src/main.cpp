@@ -17,6 +17,7 @@
 // Project
 #include "aio.h"
 #include "clock.h"
+#include "desc.h"
 
 VkInstance instance;
 VkDebugUtilsMessengerEXT_T *debugMessenger;
@@ -47,15 +48,6 @@ PFN_vkCmdDebugMarkerBeginEXT vkCmdDebugMarkerBegin = 0;
 PFN_vkCmdDebugMarkerEndEXT vkCmdDebugMarkerEnd = 0;
 PFN_vkCmdDebugMarkerInsertEXT vkCmdDebugMarkerInsert = 0;
 
-enum Access
-{
-	Access_GPU_Read = 0,
-	Access_GPU_Write,
-	Access_GPU_ReadWrite,
-	Access_CPU_Read,
-	Access_CPU_Write,
-	Access_Count
-};
 
 struct Memory
 {
@@ -737,19 +729,19 @@ int compileCompute(Compute *_compute, const cJSON *_json,
 		char debugName[128];
 		const cJSON *item = cJSON_GetArrayItem(jsonData, i);
 
-		const cJSON *jdata = cJSON_GetObjectItem(item, "data");
+		const cJSON *jsource = cJSON_GetObjectItem(item, "source");
 		const cJSON *jaccess = cJSON_GetObjectItem(item, "access");
 		const cJSON *jsize = cJSON_GetObjectItem(item, "size");
 		const cJSON *jname = cJSON_GetObjectItem(item, "name");
 		const cJSON *jpath = cJSON_GetObjectItem(item, "path");
 
-		const char *data = cJSON_GetStringValue(jdata);
+		const char *source = cJSON_GetStringValue(jsource);
 		const char *name = cJSON_GetStringValue(jname);
 		const char *access = cJSON_GetStringValue(jaccess);
 		const char *path = cJSON_GetStringValue(jpath);
 		VkDeviceSize size = cJSON_GetNumberValue(jsize);
 
-		if(strcmp(data, "memory") == 0)	// Buffer related to memory only
+		if(strcmp(source, "memory") == 0)	// Buffer related to memory only
 		{
 			VkBuffer buffer;
 			VkDeviceSize offset;
@@ -760,7 +752,7 @@ int compileCompute(Compute *_compute, const cJSON *_json,
 			bufferInfos[0][i].offset = bufferInfos[1][i].offset = 0;
 			bufferInfos[0][i].range = bufferInfos[1][i].range = size;
 		}
-		else if(strcmp(data, "file") == 0) // Buffer related to a single file
+		else if(strcmp(source, "file") == 0) // Buffer related to a single file
 		{
 			if(strcmp(access, "read") == 0)
 			{
@@ -807,7 +799,7 @@ int compileCompute(Compute *_compute, const cJSON *_json,
 				bufferInfos[0][i].range = bufferInfos[1][i].range = size;
 			}
 		}
-		else if(strcmp(data, "directory") == 0) // Buffer related to a directory containing multiple files
+		else if(strcmp(source, "directory") == 0) // Buffer related to a directory containing multiple files
 		{
 			if(strcmp(access, "read") == 0)
 			{
@@ -933,7 +925,7 @@ int compileCompute(Compute *_compute, const cJSON *_json,
 		const cJSON *item = cJSON_GetArrayItem(jsonProgram, i);
 
 		VkShaderModule module;
-		const cJSON *jshader = cJSON_GetObjectItem(item, "shader"); 
+		const cJSON *jshader = cJSON_GetObjectItem(item, "path"); 
 		const char *shaderName = cJSON_GetStringValue(jshader);
 		createShaderModule(_compute, shaderName, &module, shaderName);
 
@@ -1016,7 +1008,7 @@ int main(int argc, char *argv[])
 
 	printf("cJSON version: %s\n", cJSON_Version());
 
-	FILE* file = fopen("data/test.json", "r");
+	FILE* file = fopen("data/sha256.json", "r");
 	if(file != 0)
 	{
 		char buffer[16*1024];
