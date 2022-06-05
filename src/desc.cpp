@@ -124,8 +124,40 @@ static bool descParseData(Description *_description, const cJSON *_data)
 			_description->dataList[i].name = STRING_ANONYMOUS;
 		}
 
-		// TODO: Accumulate memory required from the different pools for this data
-		
+		// Accumulate memory required from the different pools for this data item
+		const Data *dataItem = _description->dataList + i;		
+		size_t *poolSizes = _description->parameters.poolSizes;
+		size_t asize = alignSize(dataItem->size);
+		switch(dataItem->source)
+		{
+			case DataSource_File:
+				if(dataItem->access == DataAccess_Read)
+				{
+					poolSizes[Access_CPU_Write] += asize;
+					poolSizes[Access_GPU_Read] += asize;
+				}
+				else if(dataItem->access == DataAccess_Write)
+				{
+					poolSizes[Access_CPU_Read] += asize;
+					poolSizes[Access_GPU_Write] += asize;
+				}
+				break;
+			case DataSource_Directory:
+				if(dataItem->access == DataAccess_Read)
+				{
+					poolSizes[Access_CPU_Write] += 2*asize;
+					poolSizes[Access_GPU_Read] += 2*asize;
+				}
+				else if(dataItem->access == DataAccess_Write)
+				{
+					poolSizes[Access_CPU_Read] += 2*asize;
+					poolSizes[Access_GPU_Write] += 2*asize;
+				}
+				break;
+			case DataSource_Memory:
+				poolSizes[Access_GPU_ReadWrite] += asize;
+				break;
+		}
 	}
 
 	return result;
@@ -195,8 +227,34 @@ static bool descParseProgram(Description *_description, const cJSON *_program)
 }
 
 
-Description *descCreate(const char *_buffer)
+static void descInfo(const Description *_description)
 {
+	if(_description)
+	{
+		const size_t SIZE_IN_MIB = 1024*1024;
+		const size_t *poolSizes = _description->parameters.poolSizes;
+		printf("[Info] Iterations: %d\n", _description->parameters.iterations);
+		printf("[Info] Data count: %d\n", _description->dataCount);
+		printf("[Info] Program count: %d\n", _description->programCount);
+		printf("[Info] Memory GPU Read: %lu MiB\n", poolSizes[Access_GPU_Read] / SIZE_IN_MIB);
+		printf("[Info] Memory GPU Write: %lu MiB\n", poolSizes[Access_GPU_Write] / SIZE_IN_MIB);
+		printf("[Info] Memory GPU ReadWrite: %lu MiB\n", poolSizes[Access_GPU_ReadWrite] / SIZE_IN_MIB);
+		printf("[Info] Memory CPU Read: %lu MiB\n", poolSizes[Access_CPU_Read] / SIZE_IN_MIB);
+		printf("[Info] Memory CPU Write: %lu MiB\n", poolSizes[Access_CPU_Write] / SIZE_IN_MIB);
+	}
+	else
+	{
+		printf("[Error] JSON compute description is invalid\n");
+	}
+}
+
+
+const Description *descCreateFromMemory(const char *_buffer)
+{
+	// JSON library version
+	printf("[Info] cJSON version: %s\n", cJSON_Version());
+	printf("[Info] JSON begin parsing...\n");
+
 	// JSON valid file check
 	cJSON *json = cJSON_Parse(_buffer);
 	if(!json) { printf("[Error] JSON format parsing error\n"); return 0; }
@@ -239,11 +297,38 @@ Description *descCreate(const char *_buffer)
 	bool success = bparam && bdata && bprogram;
 	if(!success) { descDestroy(description); description = 0; }
 
+	descInfo(description);
+	printf("[Info] JSON end parsing...\n");
+
 	return description;
 }
 
 
-void descDestroy(Description *_description)
+const Description *descCreateFromFile(const char *_path)
+{
+	const Description *description = 0;
+
+	FILE *fp = fopen(_path, "r");
+	if(fp)
+	{
+		fseek(fp, 0, SEEK_END);
+		size_t size = ftell(fp);
+		fseek(fp, 0, SEEK_SET);
+
+		char *buffer = (char *) malloc(size + 1);
+		fread(buffer, 1, size, fp); buffer[size] = 0;
+		description = descCreateFromMemory(buffer);
+
+		free(buffer);
+		fclose(fp);
+	}
+	else printf("[Error] JSON file not found %s\n", _path);
+
+	return description;
+}
+
+
+void descDestroy(const Description *_description)
 {
 	if(_description)
 	{
@@ -252,7 +337,7 @@ void descDestroy(Description *_description)
 
 		free(_description->dataList);
 		free(_description->programList);
-		free(_description);
+		free((void*)_description);
 	}
 }
 

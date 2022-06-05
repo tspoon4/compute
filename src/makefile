@@ -6,7 +6,7 @@ all: compute.elf
 compute.elf: main.o compute.o desc.o aio_lnx.o clock_lnx.o cJSON.o
 	g++ main.o compute.o desc.o aio_lnx.o clock_lnx.o cJSON.o -g -lvulkan -laio -ldl -o compute.elf
 
-main.o: main.cpp cJSON.h aio.h clock.h
+main.o: main.cpp desc.h cJSON.h aio.h clock.h
 	g++ main.cpp -c $(CFLAGS)
 
 compute.o: compute.cpp compute.h desc.h aio.h

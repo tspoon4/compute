@@ -1006,9 +1006,10 @@ int main(int argc, char *argv[])
 	initVulkan();
 	AIO *aio = aioCreate(256);
 
-	printf("cJSON version: %s\n", cJSON_Version());
+	const Description *desc = descCreateFromFile("data/test.json");
+	descDestroy(desc);
 
-	FILE* file = fopen("data/sha256.json", "r");
+	FILE* file = fopen("data/test.json", "r");
 	if(file != 0)
 	{
 		char buffer[16*1024];
