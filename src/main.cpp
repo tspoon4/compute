@@ -10,7 +10,6 @@
 #include <algorithm>
 // Dependencies
 #include <vulkan/vulkan.h>
-#include "cJSON.h"
 // Renderdoc
 #include <dlfcn.h>
 #include "renderdoc_app.h"
@@ -59,7 +58,7 @@ struct Memory
 
 struct Compute
 {
-	Memory memory[Access_Count];
+	Memory memory[Access_Count]= {0};
 	std::vector<VkBuffer> buffers;
 	std::vector<VkPipeline> pipelines;
 	std::vector<VkShaderModule> shaderModules;
@@ -373,7 +372,8 @@ void ComputeDestroy(Compute *_compute)
 	{
 		if(_compute->memory[i].mapped)
 			vkUnmapMemory(device, _compute->memory[i].memory);
-		vkFreeMemory(device, _compute->memory[i].memory, 0);
+		if(_compute->memory[i].memory != 0)
+			vkFreeMemory(device, _compute->memory[i].memory, 0);
 	}
 }
 
@@ -403,7 +403,7 @@ VkMemoryPropertyFlags accessToMemoryFlags(Access _access)
 	return mapping[_access];
 }
 
-void allocateMemory(Compute *_compute, const cJSON *_jsonData)
+void allocateMemory(Compute *_compute, const Description *_desc)
 {
 	VkBufferCreateInfo bufferInfo;
 	memset(&bufferInfo, 0, sizeof(VkBufferCreateInfo));
@@ -414,7 +414,6 @@ void allocateMemory(Compute *_compute, const cJSON *_jsonData)
 	VkMemoryAllocateInfo allocInfo;
 	memset(&allocInfo, 0, sizeof(VkMemoryAllocateInfo));
    	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = 64*1024*1024;
 
 	VkBuffer buffer;
 	VkMemoryRequirements memory;
@@ -429,9 +428,8 @@ void allocateMemory(Compute *_compute, const cJSON *_jsonData)
 		allocInfo.memoryTypeIndex = findProperties(&memoryProperties, memory.memoryTypeBits, accessToMemoryFlags(Access(i)));
 		//printf("Memory type chosen: %d\n", allocInfo.memoryTypeIndex);
 
-		_compute->memory[i].mapped = 0;
-		_compute->memory[i].offset = 0;
 		_compute->memory[i].alignment = memory.alignment;
+		allocInfo.allocationSize = _desc->parameters.poolSizes[i];
 		vkAllocateMemory(device, &allocInfo, 0, &_compute->memory[i].memory);
 	}
 
@@ -663,18 +661,15 @@ void createAIOCommands(Compute *_compute, AIOCmdBuffer *_aioCmdBuffer, const std
 	}
 }
 
-int compileCompute(Compute *_compute, const cJSON *_json,
+int compileCompute(Compute *_compute, const Description *_desc,
 					VkCommandBuffer _graphicsCmdBuffers[2], VkCommandBuffer _transferCmdBuffers[2],
 					VkCommandBuffer _transferUniqueCmdBuffers[2], VkCommandBuffer _computeCmdBuffers[2],
 					std::vector<AIOWorkload> *_aioWorkload, std::vector<AIOWorkload> *_aioUniqueWorkload)
 {
 	int iterations = -1;
-	const cJSON *jsonParam = cJSON_GetObjectItem(_json, "param");
-	const cJSON *jsonData = cJSON_GetObjectItem(_json, "data");
-	const cJSON *jsonProgram = cJSON_GetObjectItem(_json, "program");
 
 	// Allocate memory
-	allocateMemory(_compute, jsonData);
+	allocateMemory(_compute, _desc);
 
 	// Allocate command buffers
 	allocateCommandBuffers(graphicsCommandPool, 2, _graphicsCmdBuffers);
@@ -721,133 +716,121 @@ int compileCompute(Compute *_compute, const cJSON *_json,
 		vkCmdDebugMarkerBegin(_transferUniqueCmdBuffers[1], &markerInfo2);
 	}
 
-	iterations = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonParam, "iterations"));
+	iterations = _desc->parameters.iterations;
 
-	int count = cJSON_GetArraySize(jsonData);
+	int count = _desc->dataCount;
 	for(int i = 0; i < count; ++i)
 	{
 		char debugName[128];
-		const cJSON *item = cJSON_GetArrayItem(jsonData, i);
+		const Data *item = _desc->dataList + i;
 
-		const cJSON *jsource = cJSON_GetObjectItem(item, "source");
-		const cJSON *jaccess = cJSON_GetObjectItem(item, "access");
-		const cJSON *jsize = cJSON_GetObjectItem(item, "size");
-		const cJSON *jname = cJSON_GetObjectItem(item, "name");
-		const cJSON *jpath = cJSON_GetObjectItem(item, "path");
-
-		const char *source = cJSON_GetStringValue(jsource);
-		const char *name = cJSON_GetStringValue(jname);
-		const char *access = cJSON_GetStringValue(jaccess);
-		const char *path = cJSON_GetStringValue(jpath);
-		VkDeviceSize size = cJSON_GetNumberValue(jsize);
-
-		if(strcmp(source, "memory") == 0)	// Buffer related to memory only
+		if(item->source == DataSource_Memory)
 		{
 			VkBuffer buffer;
 			VkDeviceSize offset;
-			createBuffer(_compute, size, Access_GPU_ReadWrite, &buffer, &offset, 
-							buildName(debugName, name, "_GPU_ReadWrite"));
+			createBuffer(_compute, item->size, Access_GPU_ReadWrite, &buffer, &offset, 
+							buildName(debugName, item->name, "_GPU_ReadWrite"));
 
 			bufferInfos[0][i].buffer = bufferInfos[1][i].buffer = buffer;
 			bufferInfos[0][i].offset = bufferInfos[1][i].offset = 0;
-			bufferInfos[0][i].range = bufferInfos[1][i].range = size;
+			bufferInfos[0][i].range = bufferInfos[1][i].range = item->size;
 		}
-		else if(strcmp(source, "file") == 0) // Buffer related to a single file
+		else if(item->source == DataSource_File)
 		{
-			if(strcmp(access, "read") == 0)
+			if(item->access == DataAccess_Read)
 			{
 				VkBuffer sbuffer;
 				VkDeviceSize offsets[2];
-				createBuffer(_compute, size, Access_CPU_Write, &sbuffer, &offsets[0], 
-								buildName(debugName, name, "_CPU_Write"));
+				createBuffer(_compute, item->size, Access_CPU_Write, &sbuffer, &offsets[0], 
+								buildName(debugName, item->name, "_CPU_Write"));
 
 				offsets[1] = offsets[0];
-				createAIOWorkload(_aioUniqueWorkload, path, false, Access_CPU_Write, offsets, size, iterations);
+				createAIOWorkload(_aioUniqueWorkload, item->path, false, Access_CPU_Write, offsets, item->size, iterations);
 			
 				VkBuffer buffer;
 				VkDeviceSize offset;
-				createBuffer(_compute, size, Access_GPU_Read, &buffer, &offset, 
-								buildName(debugName, name, "_GPU_Read"));
+				createBuffer(_compute, item->size, Access_GPU_Read, &buffer, &offset, 
+								buildName(debugName, item->name, "_GPU_Read"));
 
 				float color[4] = { 1.0f, 0.4f, 0.4f, 1.0f };
-				createTransferCommand(_compute, _transferUniqueCmdBuffers[0], sbuffer, buffer, size, name, color);
+				createTransferCommand(_compute, _transferUniqueCmdBuffers[0], sbuffer, buffer, item->size, item->name, color);
 
 				bufferInfos[0][i].buffer = bufferInfos[1][i].buffer = buffer;
 				bufferInfos[0][i].offset = bufferInfos[1][i].offset = 0;
-				bufferInfos[0][i].range = bufferInfos[1][i].range = size;
+				bufferInfos[0][i].range = bufferInfos[1][i].range = item->size;
 			}
-			else if(strcmp(access, "write") == 0)
+			else if(item->access == DataAccess_Write)
 			{
 				VkBuffer sbuffer;
 				VkDeviceSize offsets[2];
-				createBuffer(_compute, size, Access_CPU_Read, &sbuffer, &offsets[0],
-								buildName(debugName, name, "_CPU_Read"));
+				createBuffer(_compute, item->size, Access_CPU_Read, &sbuffer, &offsets[0],
+								buildName(debugName, item->name, "_CPU_Read"));
 
 				offsets[1] = offsets[0];
-				createAIOWorkload(_aioUniqueWorkload, path, false, Access_CPU_Read, offsets, size, iterations);
+				createAIOWorkload(_aioUniqueWorkload, item->path, false, Access_CPU_Read, offsets, item->size, iterations);
 
 				VkBuffer buffer;
 				VkDeviceSize offset;
-				createBuffer(_compute, size, Access_GPU_Write, &buffer, &offset, 
-								buildName(debugName, name, "_GPU_Write"));
+				createBuffer(_compute, item->size, Access_GPU_Write, &buffer, &offset, 
+								buildName(debugName, item->name, "_GPU_Write"));
 
 				float color[4] = { 0.4f, 0.4f, 1.0f, 1.0f };
-				createTransferCommand(_compute, _transferUniqueCmdBuffers[1], buffer, sbuffer, size, name, color);
+				createTransferCommand(_compute, _transferUniqueCmdBuffers[1], buffer, sbuffer, item->size, item->name, color);
 
 				bufferInfos[0][i].buffer = bufferInfos[1][i].buffer = buffer;
 				bufferInfos[0][i].offset = bufferInfos[1][i].offset = 0;
-				bufferInfos[0][i].range = bufferInfos[1][i].range = size;
+				bufferInfos[0][i].range = bufferInfos[1][i].range = item->size;
 			}
 		}
-		else if(strcmp(source, "directory") == 0) // Buffer related to a directory containing multiple files
+		else if(item->source == DataSource_Directory)
 		{
-			if(strcmp(access, "read") == 0)
+			if(item->access == DataAccess_Read)
 			{
 				VkBuffer sbuffer[2];
 				VkDeviceSize offsets[2];
-				createBuffer(_compute, size, Access_CPU_Write, &sbuffer[0], &offsets[0], 
-								buildName(debugName, name, "_CPU_Write_0"));
-				createBuffer(_compute, size, Access_CPU_Write, &sbuffer[1], &offsets[1], 
-								buildName(debugName, name, "_CPU_Write_1"));
-				createAIOWorkload(_aioWorkload, path, true, Access_CPU_Write, offsets, size, iterations);
+				createBuffer(_compute, item->size, Access_CPU_Write, &sbuffer[0], &offsets[0], 
+								buildName(debugName, item->name, "_CPU_Write_0"));
+				createBuffer(_compute, item->size, Access_CPU_Write, &sbuffer[1], &offsets[1], 
+								buildName(debugName, item->name, "_CPU_Write_1"));
+				createAIOWorkload(_aioWorkload, item->path, true, Access_CPU_Write, offsets, item->size, iterations);
 			
 				VkBuffer buffer[2];
-				createBuffer(_compute, size, Access_GPU_Read, &buffer[0], &offsets[0], 
-								buildName(debugName, name, "_GPU_Read_0"));
-				createBuffer(_compute, size, Access_GPU_Read, &buffer[1], &offsets[1],
-								buildName(debugName, name, "_GPU_Read_1"));
+				createBuffer(_compute, item->size, Access_GPU_Read, &buffer[0], &offsets[0], 
+								buildName(debugName, item->name, "_GPU_Read_0"));
+				createBuffer(_compute, item->size, Access_GPU_Read, &buffer[1], &offsets[1],
+								buildName(debugName, item->name, "_GPU_Read_1"));
 
 				float color[4] = { 1.0f, 0.4f, 0.4f, 1.0f };
-				createTransferCommand(_compute, _transferCmdBuffers[0], sbuffer[1], buffer[1], size, name, color);
-				createTransferCommand(_compute, _transferCmdBuffers[1], sbuffer[0], buffer[0], size, name, color);
+				createTransferCommand(_compute, _transferCmdBuffers[0], sbuffer[1], buffer[1], item->size, item->name, color);
+				createTransferCommand(_compute, _transferCmdBuffers[1], sbuffer[0], buffer[0], item->size, item->name, color);
 
 				bufferInfos[0][i].buffer = buffer[0]; bufferInfos[1][i].buffer = buffer[1];
 				bufferInfos[0][i].offset = bufferInfos[1][i].offset = 0;
-				bufferInfos[0][i].range = bufferInfos[1][i].range = size;
+				bufferInfos[0][i].range = bufferInfos[1][i].range = item->size;
 			}
-			else if(strcmp(access, "write") == 0)
+			else if(item->access == DataAccess_Write)
 			{
 				VkBuffer sbuffer[2];
 				VkDeviceSize offsets[2];
-				createBuffer(_compute, size, Access_CPU_Read, &sbuffer[0], &offsets[0], 
-								buildName(debugName, name, "_CPU_Read_0"));
-				createBuffer(_compute, size, Access_CPU_Read, &sbuffer[1], &offsets[1], 
-								buildName(debugName, name, "_CPU_Read_1"));
-				createAIOWorkload(_aioWorkload, path, true, Access_CPU_Read, offsets, size, iterations);
+				createBuffer(_compute, item->size, Access_CPU_Read, &sbuffer[0], &offsets[0], 
+								buildName(debugName, item->name, "_CPU_Read_0"));
+				createBuffer(_compute, item->size, Access_CPU_Read, &sbuffer[1], &offsets[1], 
+								buildName(debugName, item->name, "_CPU_Read_1"));
+				createAIOWorkload(_aioWorkload, item->path, true, Access_CPU_Read, offsets, item->size, iterations);
 
 				VkBuffer buffer[2];
-				createBuffer(_compute, size, Access_GPU_Write, &buffer[0], &offsets[0],
-								buildName(debugName, name, "_GPU_Write_0"));
-				createBuffer(_compute, size, Access_GPU_Write, &buffer[1], &offsets[1], 
-								buildName(debugName, name, "_GPU_Write_1"));
+				createBuffer(_compute, item->size, Access_GPU_Write, &buffer[0], &offsets[0],
+								buildName(debugName, item->name, "_GPU_Write_0"));
+				createBuffer(_compute, item->size, Access_GPU_Write, &buffer[1], &offsets[1], 
+								buildName(debugName, item->name, "_GPU_Write_1"));
 			
 				float color[4] = { 0.4f, 0.4f, 1.0f, 1.0f };
-				createTransferCommand(_compute, _transferCmdBuffers[0], buffer[1], sbuffer[1], size, name, color);
-				createTransferCommand(_compute, _transferCmdBuffers[1], buffer[0], sbuffer[0], size, name, color);
+				createTransferCommand(_compute, _transferCmdBuffers[0], buffer[1], sbuffer[1], item->size, item->name, color);
+				createTransferCommand(_compute, _transferCmdBuffers[1], buffer[0], sbuffer[0], item->size, item->name, color);
 
 				bufferInfos[0][i].buffer = buffer[0]; bufferInfos[1][i].buffer = buffer[1];
 				bufferInfos[0][i].offset = bufferInfos[1][i].offset = 0;
-				bufferInfos[0][i].range = bufferInfos[1][i].range = size;
+				bufferInfos[0][i].range = bufferInfos[1][i].range = item-> size;
 			}
 		}
 
@@ -919,15 +902,13 @@ int compileCompute(Compute *_compute, const cJSON *_json,
 		vkCmdDebugMarkerBegin(_graphicsCmdBuffers[1], &markerInfo);
 	}
 
-	count = cJSON_GetArraySize(jsonProgram);
+	count = _desc->programCount;
 	for(int i = 0; i < count; ++i)
 	{
-		const cJSON *item = cJSON_GetArrayItem(jsonProgram, i);
+		const Program *item = _desc->programList + i;
 
 		VkShaderModule module;
-		const cJSON *jshader = cJSON_GetObjectItem(item, "path"); 
-		const char *shaderName = cJSON_GetStringValue(jshader);
-		createShaderModule(_compute, shaderName, &module, shaderName);
+		createShaderModule(_compute, item->path, &module, item->path);
 
 		VkPipeline pipeline;
 		createComputePipeline(_compute, &module, &pipelineLayout, &pipeline);
@@ -940,21 +921,16 @@ int compileCompute(Compute *_compute, const cJSON *_json,
 		vkCmdBindDescriptorSets(_graphicsCmdBuffers[1], VK_PIPELINE_BIND_POINT_COMPUTE, 
 			pipelineLayout, 0, 1, &computeDescriptors[1], 0, 0);
 
-		const cJSON *jname = cJSON_GetObjectItem(item, "name");
 		if(DEBUG_MARKERS)
 		{
 			VkDebugMarkerMarkerInfoEXT markerInfo = { VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT, 
-														0, cJSON_GetStringValue(jname), { 1.0f, 1.0f, 0.4f, 1.0f }};
+														0, item->name, { 1.0f, 1.0f, 0.4f, 1.0f }};
 			vkCmdDebugMarkerBegin(_graphicsCmdBuffers[0], &markerInfo);
 			vkCmdDebugMarkerBegin(_graphicsCmdBuffers[1], &markerInfo);
 		}
 
-		const cJSON *dispatch = cJSON_GetObjectItem(item, "dispatch");
-		uint32_t countX = (uint32_t) cJSON_GetNumberValue(cJSON_GetArrayItem(dispatch, 0));
-		uint32_t countY = (uint32_t) cJSON_GetNumberValue(cJSON_GetArrayItem(dispatch, 1));
-		uint32_t countZ = (uint32_t) cJSON_GetNumberValue(cJSON_GetArrayItem(dispatch, 2));
-		vkCmdDispatch(_graphicsCmdBuffers[0], countX, countY, countZ);
-		vkCmdDispatch(_graphicsCmdBuffers[1], countX, countY, countZ);
+		vkCmdDispatch(_graphicsCmdBuffers[0], item->dispatch[0], item->dispatch[1], item->dispatch[2]);
+		vkCmdDispatch(_graphicsCmdBuffers[1], item->dispatch[0], item->dispatch[1], item->dispatch[2]);
 
 		if(DEBUG_MARKERS)
 		{
@@ -1001,30 +977,22 @@ int main(int argc, char *argv[])
 		int ret = RENDERDOC_GetAPI(eRENDERDOC_API_Version_1_1_2, (void **)&rdoc_api);
 		assert(ret == 1);
 	}
-	
+
 	Compute compute;
 	initVulkan();
 	AIO *aio = aioCreate(256);
 
 	const Description *desc = descCreateFromFile("data/test.json");
-	descDestroy(desc);
 
-	FILE* file = fopen("data/test.json", "r");
-	if(file != 0)
+	if(desc != 0)
 	{
-		char buffer[16*1024];
-		size_t size = fread(buffer, 1, 16*1024, file);
-		buffer[size] = 0;
-
-		cJSON *json = cJSON_Parse(buffer);
-
 		VkCommandBuffer graphicsCmdBuffers[2];
 		VkCommandBuffer transferCmdBuffers[2];
 		VkCommandBuffer transferUniqueCmdBuffers[2];
 		VkCommandBuffer computeCmdBuffers[2];
 		std::vector<AIOWorkload> aioWorkload;
 		std::vector<AIOWorkload> aioUniqueWorkload;
-		int count = compileCompute(&compute, json, graphicsCmdBuffers, transferCmdBuffers, transferUniqueCmdBuffers, 
+		int count = compileCompute(&compute, desc, graphicsCmdBuffers, transferCmdBuffers, transferUniqueCmdBuffers, 
 									computeCmdBuffers, &aioWorkload, &aioUniqueWorkload);
 
 		VkSubmitInfo graphicsSubmit;
@@ -1138,7 +1106,7 @@ int main(int argc, char *argv[])
 		aioFreeCmdBuffer(aioCmdBuffers[0]);
 		aioFreeCmdBuffer(aioCmdBuffers[1]);
 
-		cJSON_Delete(json);
+		descDestroy(desc);
 
 		double total = 0.0;
 		for(double t : timings) { total += t; }

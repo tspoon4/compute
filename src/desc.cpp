@@ -27,6 +27,9 @@ static bool descParseParam(Description *_description, const cJSON *_param)
 		_description->parameters.iterations = 8;
 	}
 
+	// Initialize the memory pools to minimum SAFE_ALIGNMENT
+	for(int i = 0; i < Access_Count; ++i) _description->parameters.poolSizes[i] = SAFE_ALIGNMENT;
+
 	return result;
 }
 
@@ -101,14 +104,21 @@ static bool descParseData(Description *_description, const cJSON *_data)
 		if(path && cJSON_IsString(path))
 		{
 			const char *pth = cJSON_GetStringValue(path);
-			
-			if(_description->dataList[i].source != DataSource_Memory)
+			bool notMemory = _description->dataList[i].source != DataSource_Memory;
+			bool notFileWrite = _description->dataList[i].source != DataSource_File && 
+								_description->dataList[i].access != DataAccess_Write;
+
+			if(notMemory)
 			{
-				FILE *fp = fopen(pth, "rb");
-				if(fp) { fclose(fp); }
-				else { printf("[Error] data[%d].path=%s can't be found on disk\n", i, pth); result = false; }
+				_description->dataList[i].path = pth;
+
+				if(notFileWrite)
+				{
+					FILE *fp = fopen(pth, "rb");
+					if(fp) { fclose(fp); }
+					else { printf("[Error] data[%d].path=%s can't be found on disk\n", i, pth); result = false; }
+				}
 			}
-			else { printf("[Warning] JSON data[%d].path = %s will be ignored since source = \"memory\"\n", i, pth); }
 		}
 		else if(_description->dataList[i].source != DataSource_Memory)
 		{
@@ -209,7 +219,7 @@ static bool descParseProgram(Description *_description, const cJSON *_program)
 		{
 			const char *pth = cJSON_GetStringValue(path);
 			FILE *fp = fopen(pth, "rb");
-			if(fp) { fclose(fp); }
+			if(fp) { _description->programList[i].path = pth; fclose(fp); }
 			else { printf("[Error] program[%d].path=%s can't be found on disk\n", i, pth); result = false; }
 		}
 		else { printf("[Error] program[%d].path is not provided, path is mandatory\n", i); result = false; }
