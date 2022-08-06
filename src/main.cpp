@@ -36,16 +36,16 @@ const bool VALIDATION_LAYER = true;
 const bool DEBUG_MARKERS = true;
 const char *INSTANCE_LAYERS[] = { "VK_LAYER_KHRONOS_validation" };
 const char *INSTANCE_EXTENSIONS[] = { "VK_KHR_surface",
-									VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-									VK_EXT_DEBUG_REPORT_EXTENSION_NAME };
-const char *DEVICE_EXTENSIONS[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-									"VK_EXT_debug_marker" };
+					VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+					VK_EXT_DEBUG_REPORT_EXTENSION_NAME };
+const char *DEVICE_EXTENSIONS[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
-PFN_vkDebugMarkerSetObjectTagEXT vkDebugMarkerSetObjectTag = 0;
-PFN_vkDebugMarkerSetObjectNameEXT vkDebugMarkerSetObjectName = 0;
-PFN_vkCmdDebugMarkerBeginEXT vkCmdDebugMarkerBegin = 0;
-PFN_vkCmdDebugMarkerEndEXT vkCmdDebugMarkerEnd = 0;
-PFN_vkCmdDebugMarkerInsertEXT vkCmdDebugMarkerInsert = 0;
+
+PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectName = 0;
+PFN_vkSetDebugUtilsObjectTagEXT vkSetDebugUtilsObjectTag = 0;
+PFN_vkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabel = 0;
+PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabel = 0;
+PFN_vkCmdInsertDebugUtilsLabelEXT vkCmdInsertDebugUtilsLabel = 0;
 
 
 struct Memory
@@ -147,12 +147,12 @@ static void initVulkan()
 		{
 			memset(&debugCreateInfo, 0, sizeof(VkDebugUtilsMessengerCreateInfoEXT));
 			debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-			debugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | 
-										VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-										VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+			debugCreateInfo.messageSeverity = //VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | 
+							  VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+							  VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 			debugCreateInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-										VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-										VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+							VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+							VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 			debugCreateInfo.pfnUserCallback = &vulkanDebugCallback;
 
 			createInfo.enabledLayerCount = sizeof(INSTANCE_LAYERS) / sizeof(const char *);
@@ -165,7 +165,8 @@ static void initVulkan()
 		if(VALIDATION_LAYER)
 		{
 			PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT =
-				(PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+				(PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, 
+				"vkCreateDebugUtilsMessengerEXT");
 			vkCreateDebugUtilsMessengerEXT(instance, &debugCreateInfo, 0, &debugMessenger);
 		}
 		
@@ -299,16 +300,21 @@ static void initVulkan()
 		poolInfo.poolSizeCount = sizeof(poolSizes) / sizeof(VkDescriptorPoolSize);
 		poolInfo.pPoolSizes = poolSizes;
 		poolInfo.maxSets = 32;
-        vkCreateDescriptorPool(device, &poolInfo, 0, &descriptorPool);
+		vkCreateDescriptorPool(device, &poolInfo, 0, &descriptorPool);
 	}
-		
+
 	if(DEBUG_MARKERS)
 	{
-		vkDebugMarkerSetObjectTag = (PFN_vkDebugMarkerSetObjectTagEXT)vkGetDeviceProcAddr(device, "vkDebugMarkerSetObjectTagEXT");
-		vkDebugMarkerSetObjectName = (PFN_vkDebugMarkerSetObjectNameEXT)vkGetDeviceProcAddr(device, "vkDebugMarkerSetObjectNameEXT");
-		vkCmdDebugMarkerBegin = (PFN_vkCmdDebugMarkerBeginEXT)vkGetDeviceProcAddr(device, "vkCmdDebugMarkerBeginEXT");
-		vkCmdDebugMarkerEnd = (PFN_vkCmdDebugMarkerEndEXT)vkGetDeviceProcAddr(device, "vkCmdDebugMarkerEndEXT");
-		vkCmdDebugMarkerInsert = (PFN_vkCmdDebugMarkerInsertEXT)vkGetDeviceProcAddr(device, "vkCmdDebugMarkerInsertEXT");
+		vkSetDebugUtilsObjectName = (PFN_vkSetDebugUtilsObjectNameEXT) vkGetDeviceProcAddr(device, 
+				"vkSetDebugUtilsObjectNameEXT");
+		vkSetDebugUtilsObjectTag = (PFN_vkSetDebugUtilsObjectTagEXT) vkGetDeviceProcAddr(device, 
+				"vkSetDebugUtilsObjectTagEXT");
+		vkCmdBeginDebugUtilsLabel = (PFN_vkCmdBeginDebugUtilsLabelEXT) vkGetDeviceProcAddr(device, 
+				"vkCmdBeginDebugUtilsLabelEXT");
+		vkCmdEndDebugUtilsLabel = (PFN_vkCmdEndDebugUtilsLabelEXT) vkGetDeviceProcAddr(device, 
+				"vkCmdEndDebugUtilsLabelEXT");
+		vkCmdInsertDebugUtilsLabel = (PFN_vkCmdInsertDebugUtilsLabelEXT) vkGetDeviceProcAddr(device, 
+				"vkCmdInsertDebugUtilsLabelEXT");
 	}
 }
 
@@ -470,13 +476,13 @@ void createShaderModule(Compute *_compute, const char *_filename, VkShaderModule
 
 	if(DEBUG_MARKERS)
 	{
-		VkDebugMarkerObjectNameInfoEXT nameInfo;
+		VkDebugUtilsObjectNameInfoEXT nameInfo;
 		memset(&nameInfo, 0, sizeof(VkDebugMarkerObjectNameInfoEXT));
-		nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT;
-		nameInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_SHADER_MODULE_EXT;
-		nameInfo.object = (uint64_t) *_module;
+		nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		nameInfo.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
+		nameInfo.objectHandle = (uint64_t) *_module;
 		nameInfo.pObjectName = _name;
-		vkDebugMarkerSetObjectName(device, &nameInfo);
+		vkSetDebugUtilsObjectName(device, &nameInfo);
 	}
 }
 
@@ -556,13 +562,13 @@ void createBuffer(Compute *_compute, VkDeviceSize _size, Access _access,
 
 	if(DEBUG_MARKERS)
 	{
-		VkDebugMarkerObjectNameInfoEXT nameInfo;
+		VkDebugUtilsObjectNameInfoEXT nameInfo;
 		memset(&nameInfo, 0, sizeof(VkDebugMarkerObjectNameInfoEXT));
-		nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT;
-		nameInfo.objectType = VK_DEBUG_REPORT_OBJECT_TYPE_BUFFER_EXT;
-		nameInfo.object = (uint64_t) *_buffer;
+		nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		nameInfo.objectType = VK_OBJECT_TYPE_BUFFER;
+		nameInfo.objectHandle = (uint64_t) *_buffer;
 		nameInfo.pObjectName = _name;
-		vkDebugMarkerSetObjectName(device, &nameInfo);
+		vkSetDebugUtilsObjectName(device, &nameInfo);
 	}
 }
 
@@ -572,9 +578,9 @@ void createTransferCommand(Compute *_compute, VkCommandBuffer _transferCmdBuffer
 {
 	if(DEBUG_MARKERS)
 	{
-		VkDebugMarkerMarkerInfoEXT markerInfo = { VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT, 
-													0, _name, {_color[0], _color[1], _color[2], _color[3]} };
-		vkCmdDebugMarkerBegin(_transferCmdBuffer, &markerInfo);
+		VkDebugUtilsLabelEXT labelInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
+			0, _name, {_color[0], _color[1], _color[2], _color[3]} };
+		vkCmdBeginDebugUtilsLabel(_transferCmdBuffer, &labelInfo);
 	}
 
 	VkBufferCopy copyRegion;
@@ -586,7 +592,7 @@ void createTransferCommand(Compute *_compute, VkCommandBuffer _transferCmdBuffer
 
 	if(DEBUG_MARKERS)
 	{
-		vkCmdDebugMarkerEnd(_transferCmdBuffer);
+		vkCmdEndDebugUtilsLabel(_transferCmdBuffer);
 	}
 }
 
@@ -695,25 +701,25 @@ int compileCompute(Compute *_compute, const Description *_desc,
 
 	VkCommandBufferBeginInfo beginInfo;
 	memset(&beginInfo, 0, sizeof(VkCommandBufferBeginInfo));
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = 0; //VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    beginInfo.pInheritanceInfo = 0; // Optional
-    vkBeginCommandBuffer(_transferCmdBuffers[0], &beginInfo);
-    vkBeginCommandBuffer(_transferCmdBuffers[1], &beginInfo);
-    vkBeginCommandBuffer(_transferUniqueCmdBuffers[0], &beginInfo);
-    vkBeginCommandBuffer(_transferUniqueCmdBuffers[1], &beginInfo);
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = 0; //VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	beginInfo.pInheritanceInfo = 0; // Optional
+	vkBeginCommandBuffer(_transferCmdBuffers[0], &beginInfo);
+	vkBeginCommandBuffer(_transferCmdBuffers[1], &beginInfo);
+	vkBeginCommandBuffer(_transferUniqueCmdBuffers[0], &beginInfo);
+	vkBeginCommandBuffer(_transferUniqueCmdBuffers[1], &beginInfo);
 
 	if(DEBUG_MARKERS)
 	{
-		VkDebugMarkerMarkerInfoEXT markerInfo = { VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT, 
-													0, "Transfer Cmds", { 0.7f, 0.7f, 0.7f, 1.0f }};
-		vkCmdDebugMarkerBegin(_transferCmdBuffers[0], &markerInfo);
-		vkCmdDebugMarkerBegin(_transferCmdBuffers[1], &markerInfo);
+		VkDebugUtilsLabelEXT labelInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
+			0, "Transfer Cmds", { 0.7f, 0.7f, 0.7f, 1.0f }};
+		vkCmdBeginDebugUtilsLabel(_transferCmdBuffers[0], &labelInfo);
+		vkCmdBeginDebugUtilsLabel(_transferCmdBuffers[1], &labelInfo);
 
-		VkDebugMarkerMarkerInfoEXT markerInfo2 = { VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT, 
-													0, "Transfer Unique Cmds", { 0.6f, 0.6f, 0.6f, 1.0f }};
-		vkCmdDebugMarkerBegin(_transferUniqueCmdBuffers[0], &markerInfo2);
-		vkCmdDebugMarkerBegin(_transferUniqueCmdBuffers[1], &markerInfo2);
+		VkDebugUtilsLabelEXT labelInfo2 = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
+			0, "Transfer Unique Cmds", { 0.6f, 0.6f, 0.6f, 1.0f }};
+		vkCmdBeginDebugUtilsLabel(_transferUniqueCmdBuffers[0], &labelInfo2);
+		vkCmdBeginDebugUtilsLabel(_transferUniqueCmdBuffers[1], &labelInfo2);
 	}
 
 	iterations = _desc->parameters.iterations;
@@ -851,10 +857,10 @@ int compileCompute(Compute *_compute, const Description *_desc,
 
 	if(DEBUG_MARKERS)
 	{
-		vkCmdDebugMarkerEnd(_transferCmdBuffers[0]);
-		vkCmdDebugMarkerEnd(_transferCmdBuffers[1]);
-		vkCmdDebugMarkerEnd(_transferUniqueCmdBuffers[0]);
-		vkCmdDebugMarkerEnd(_transferUniqueCmdBuffers[1]);
+		vkCmdEndDebugUtilsLabel(_transferCmdBuffers[0]);
+		vkCmdEndDebugUtilsLabel(_transferCmdBuffers[1]);
+		vkCmdEndDebugUtilsLabel(_transferUniqueCmdBuffers[0]);
+		vkCmdEndDebugUtilsLabel(_transferUniqueCmdBuffers[1]);
 	}
 
 	vkEndCommandBuffer(_transferCmdBuffers[0]);
@@ -888,18 +894,18 @@ int compileCompute(Compute *_compute, const Description *_desc,
 	// ------- Iterate over JSON program -------------------------------------------------------------
 
 	memset(&beginInfo, 0, sizeof(VkCommandBufferBeginInfo));
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    //beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    beginInfo.pInheritanceInfo = 0; // Optional
-    vkBeginCommandBuffer(_graphicsCmdBuffers[0], &beginInfo);
-    vkBeginCommandBuffer(_graphicsCmdBuffers[1], &beginInfo);
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	//beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	beginInfo.pInheritanceInfo = 0; // Optional
+	vkBeginCommandBuffer(_graphicsCmdBuffers[0], &beginInfo);
+	vkBeginCommandBuffer(_graphicsCmdBuffers[1], &beginInfo);
 
 	if(DEBUG_MARKERS)
 	{
-		VkDebugMarkerMarkerInfoEXT markerInfo = { VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT, 
-													0, "Graphics Cmds", { 0.4f, 1.0f, 0.4f, 1.0f }};
-		vkCmdDebugMarkerBegin(_graphicsCmdBuffers[0], &markerInfo);
-		vkCmdDebugMarkerBegin(_graphicsCmdBuffers[1], &markerInfo);
+		VkDebugUtilsLabelEXT labelInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
+			0, "Graphics Cmds", { 0.4f, 1.0f, 0.4f, 1.0f }};
+		vkCmdBeginDebugUtilsLabel(_graphicsCmdBuffers[0], &labelInfo);
+		vkCmdBeginDebugUtilsLabel(_graphicsCmdBuffers[1], &labelInfo);
 	}
 
 	count = _desc->programCount;
@@ -923,10 +929,10 @@ int compileCompute(Compute *_compute, const Description *_desc,
 
 		if(DEBUG_MARKERS)
 		{
-			VkDebugMarkerMarkerInfoEXT markerInfo = { VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT, 
-														0, item->name, { 1.0f, 1.0f, 0.4f, 1.0f }};
-			vkCmdDebugMarkerBegin(_graphicsCmdBuffers[0], &markerInfo);
-			vkCmdDebugMarkerBegin(_graphicsCmdBuffers[1], &markerInfo);
+			VkDebugUtilsLabelEXT labelInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
+				0, item->name, { 1.0f, 1.0f, 0.4f, 1.0f }};
+			vkCmdBeginDebugUtilsLabel(_graphicsCmdBuffers[0], &labelInfo);
+			vkCmdBeginDebugUtilsLabel(_graphicsCmdBuffers[1], &labelInfo);
 		}
 
 		vkCmdDispatch(_graphicsCmdBuffers[0], item->dispatch[0], item->dispatch[1], item->dispatch[2]);
@@ -934,8 +940,8 @@ int compileCompute(Compute *_compute, const Description *_desc,
 
 		if(DEBUG_MARKERS)
 		{
-			vkCmdDebugMarkerEnd(_graphicsCmdBuffers[0]);
-			vkCmdDebugMarkerEnd(_graphicsCmdBuffers[1]);
+			vkCmdEndDebugUtilsLabel(_graphicsCmdBuffers[0]);
+			vkCmdEndDebugUtilsLabel(_graphicsCmdBuffers[1]);
 		}
 
 		VkMemoryBarrier barrier;
@@ -943,16 +949,16 @@ int compileCompute(Compute *_compute, const Description *_desc,
 		barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
 		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-		vkCmdPipelineBarrier(_graphicsCmdBuffers[0], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-								0, 1, &barrier, 0, 0, 0, 0);
-		vkCmdPipelineBarrier(_graphicsCmdBuffers[1], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-								0, 1, &barrier, 0, 0, 0, 0);
+		vkCmdPipelineBarrier(_graphicsCmdBuffers[0], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, 0, 0, 0);
+		vkCmdPipelineBarrier(_graphicsCmdBuffers[1], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, 0, 0, 0);
 	}
 
 	if(DEBUG_MARKERS)
 	{
-		vkCmdDebugMarkerEnd(_graphicsCmdBuffers[0]);
-		vkCmdDebugMarkerEnd(_graphicsCmdBuffers[1]);
+		vkCmdEndDebugUtilsLabel(_graphicsCmdBuffers[0]);
+		vkCmdEndDebugUtilsLabel(_graphicsCmdBuffers[1]);
 	}
 
 	vkEndCommandBuffer(_graphicsCmdBuffers[0]);
