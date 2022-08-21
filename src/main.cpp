@@ -108,7 +108,7 @@ static int32_t findProperties(const VkPhysicalDeviceMemoryProperties* pMemoryPro
     return -1;
 }
 
-static void initVulkan()
+void computeCreateDevice()
 {
 	// Enumerate extensions
 	{
@@ -340,7 +340,7 @@ static void *loadFile(const char *_name, size_t *_size)
 }
 
 
-static void terminate()
+void computeDestroyDevice()
 {
 	vkDeviceWaitIdle(device);
 	vkDestroyCommandPool(device, graphicsCommandPool, 0);
@@ -360,7 +360,7 @@ static void terminate()
 }
 
 
-void ComputeDestroy(Compute *_compute)
+void computeDestroyWorkflow(Compute *_compute)
 {
 	for(VkBuffer &buffer : _compute->buffers)
 		vkDestroyBuffer(device, buffer, 0);
@@ -667,7 +667,7 @@ void createAIOCommands(Compute *_compute, AIOCmdBuffer *_aioCmdBuffer, const std
 	}
 }
 
-int compileCompute(Compute *_compute, const Description *_desc,
+int computeCompileWorkflow(Compute *_compute, const Description *_desc,
 					VkCommandBuffer _graphicsCmdBuffers[2], VkCommandBuffer _transferCmdBuffers[2],
 					VkCommandBuffer _transferUniqueCmdBuffers[2], VkCommandBuffer _computeCmdBuffers[2],
 					std::vector<AIOWorkload> *_aioWorkload, std::vector<AIOWorkload> *_aioUniqueWorkload)
@@ -949,10 +949,27 @@ int compileCompute(Compute *_compute, const Description *_desc,
 		barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
 		barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
 		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		if(DEBUG_MARKERS)
+		{
+			VkDebugUtilsLabelEXT labelInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
+				0, "Memory Barrier", { 1.0f, 0.0f, 0.0f, 1.0f }};
+			vkCmdBeginDebugUtilsLabel(_graphicsCmdBuffers[0], &labelInfo);
+			vkCmdBeginDebugUtilsLabel(_graphicsCmdBuffers[1], &labelInfo);
+		}
+
+
 		vkCmdPipelineBarrier(_graphicsCmdBuffers[0], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, 0, 0, 0);
 		vkCmdPipelineBarrier(_graphicsCmdBuffers[1], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, 0, 0, 0);
+
+		if(DEBUG_MARKERS)
+		{
+			vkCmdEndDebugUtilsLabel(_graphicsCmdBuffers[0]);
+			vkCmdEndDebugUtilsLabel(_graphicsCmdBuffers[1]);
+		}
+
 	}
 
 	if(DEBUG_MARKERS)
@@ -985,9 +1002,10 @@ int main(int argc, char *argv[])
 	}
 
 	Compute compute;
-	initVulkan();
+	computeCreateDevice();
 	AIO *aio = aioCreate(256);
 
+	//const Description *desc = descCreateFromFile("data/sha256.json");
 	const Description *desc = descCreateFromFile("data/test.json");
 
 	if(desc != 0)
@@ -998,8 +1016,8 @@ int main(int argc, char *argv[])
 		VkCommandBuffer computeCmdBuffers[2];
 		std::vector<AIOWorkload> aioWorkload;
 		std::vector<AIOWorkload> aioUniqueWorkload;
-		int count = compileCompute(&compute, desc, graphicsCmdBuffers, transferCmdBuffers, transferUniqueCmdBuffers, 
-									computeCmdBuffers, &aioWorkload, &aioUniqueWorkload);
+		int count = computeCompileWorkflow(&compute, desc, graphicsCmdBuffers, transferCmdBuffers, 
+				transferUniqueCmdBuffers, computeCmdBuffers, &aioWorkload, &aioUniqueWorkload);
 
 		VkSubmitInfo graphicsSubmit;
 		memset(&graphicsSubmit, 0, sizeof(VkSubmitInfo));
@@ -1125,8 +1143,8 @@ int main(int argc, char *argv[])
 		printf("[summary] total = %f, mean = %f, sigma = %f\n", total, mean, sqrt(variance));
 	}
 
-	ComputeDestroy(&compute);
-	terminate();
+	computeDestroyWorkflow(&compute);
+	computeDestroyDevice();
 	aioDestroy(aio);
 
 	return 0;
