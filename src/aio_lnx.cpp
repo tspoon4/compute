@@ -124,7 +124,7 @@ bool aioCmdWrite(AIOCmdBuffer *_cmdBuffer, void *_buffer, const char *_file, siz
 {
 	bool ret = false;
 
-	int fd = open(_file, O_NONBLOCK | O_WRONLY | O_CREAT | O_TRUNC, 644);
+	int fd = open(_file, O_NONBLOCK | O_WRONLY | O_CREAT | O_TRUNC /*| O_DIRECT*/, 644);
 	if(fd > 0)
 	{
 		io_prep_pwrite(_cmdBuffer->commands[_cmdBuffer->count], fd, _buffer, _size, _offset);

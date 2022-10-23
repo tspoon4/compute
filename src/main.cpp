@@ -18,19 +18,6 @@
 #include "clock.h"
 #include "desc.h"
 
-VkInstance instance;
-VkDebugUtilsMessengerEXT_T *debugMessenger;
-VkPhysicalDevice physicalDevice;
-VkPhysicalDeviceMemoryProperties memoryProperties;
-VkDevice device;
-VkCommandPool graphicsCommandPool;
-VkCommandPool transferCommandPool;
-VkCommandPool computeCommandPool;
-VkDescriptorPool descriptorPool;
-VkDescriptorSet computeDescriptors[2];
-VkQueue graphicsQueue;
-VkQueue transferQueue;
-VkQueue computeQueue;
 
 const bool VALIDATION_LAYER = true;
 const bool DEBUG_MARKERS = true;
@@ -48,6 +35,22 @@ PFN_vkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabel = 0;
 PFN_vkCmdInsertDebugUtilsLabelEXT vkCmdInsertDebugUtilsLabel = 0;
 
 
+struct Device
+{
+	VkInstance instance;
+	VkDebugUtilsMessengerEXT_T *debugMessenger;
+	VkPhysicalDevice physicalDevice;
+	VkPhysicalDeviceMemoryProperties memoryProperties;
+	VkDevice device;
+	VkCommandPool graphicsCommandPool;
+	VkCommandPool transferCommandPool;
+	VkCommandPool computeCommandPool;
+	VkDescriptorPool descriptorPool;
+	VkQueue graphicsQueue;
+	VkQueue transferQueue;
+	VkQueue computeQueue;
+};
+
 struct Memory
 {
 	VkDeviceMemory memory;
@@ -59,6 +62,7 @@ struct Memory
 struct Compute
 {
 	Memory memory[Access_Count]= {0};
+	VkDescriptorSet computeDescriptors[2];
 	std::vector<VkBuffer> buffers;
 	std::vector<VkPipeline> pipelines;
 	std::vector<VkShaderModule> shaderModules;
@@ -108,8 +112,10 @@ static int32_t findProperties(const VkPhysicalDeviceMemoryProperties* pMemoryPro
     return -1;
 }
 
-void computeCreateDevice()
+int computeCreateDevice(Device *_device)
 {
+	int result = 1;
+
 	// Enumerate extensions
 	{
 		uint32_t extensionCount = 64;
@@ -160,14 +166,14 @@ void computeCreateDevice()
 			createInfo.pNext = &debugCreateInfo;
 		}
 
-		VkResult result = vkCreateInstance(&createInfo, 0, &instance);
+		VkResult result = vkCreateInstance(&createInfo, 0, &_device->instance);
 
 		if(VALIDATION_LAYER)
 		{
 			PFN_vkCreateDebugUtilsMessengerEXT vkCreateDebugUtilsMessengerEXT =
-				(PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, 
+				(PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(_device->instance, 
 				"vkCreateDebugUtilsMessengerEXT");
-			vkCreateDebugUtilsMessengerEXT(instance, &debugCreateInfo, 0, &debugMessenger);
+			vkCreateDebugUtilsMessengerEXT(_device->instance, &debugCreateInfo, 0, &_device->debugMessenger);
 		}
 		
 	}
@@ -176,7 +182,7 @@ void computeCreateDevice()
 	{
 		uint32_t deviceCount = 64;
 		VkPhysicalDevice physicalDevices[64];
-		vkEnumeratePhysicalDevices(instance, &deviceCount, physicalDevices);
+		vkEnumeratePhysicalDevices(_device->instance, &deviceCount, physicalDevices);
 
 		printf("Vulkan physical devices:\n");
 		for(uint32_t i = 0; i < deviceCount; ++i)
@@ -186,14 +192,14 @@ void computeCreateDevice()
 			printf("%d. %s\n", i, deviceProperties.deviceName);
 		}
 
-		physicalDevice = physicalDevices[0];
+		_device->physicalDevice = physicalDevices[0];
 	}
 
 	// Enumerate physical device extensions
 	{
 		uint32_t extensionCount = 64;
 		VkExtensionProperties extensionProperties[64];
-		vkEnumerateDeviceExtensionProperties(physicalDevice, 0, &extensionCount, extensionProperties);
+		vkEnumerateDeviceExtensionProperties(_device->physicalDevice, 0, &extensionCount, extensionProperties);
 
 		printf("Physical device extensions:\n");
 		for(uint32_t i = 0; i < extensionCount; ++i)
@@ -204,7 +210,7 @@ void computeCreateDevice()
 
 	// Enumerate memory properties
 	{
-		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
+		vkGetPhysicalDeviceMemoryProperties(_device->physicalDevice, &_device->memoryProperties);
 		//printf("Memory property types:\n");
 		//for(uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
 		//{
@@ -216,7 +222,7 @@ void computeCreateDevice()
 	{
 		uint32_t queueFamilyCount = 64;
 		VkQueueFamilyProperties queueFamilies[64];
-		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies);
+		vkGetPhysicalDeviceQueueFamilyProperties(_device->physicalDevice, &queueFamilyCount, queueFamilies);
 
 		printf("Vulkan queue families:\n");
 		for(uint32_t i = 0; i < queueFamilyCount; ++i)
@@ -258,23 +264,23 @@ void computeCreateDevice()
 		createInfo.enabledExtensionCount = sizeof(DEVICE_EXTENSIONS) / sizeof(const char *);
 		createInfo.ppEnabledExtensionNames = DEVICE_EXTENSIONS;
 
-		vkCreateDevice(physicalDevice, &createInfo, 0, &device);
-		vkGetDeviceQueue(device, 0, 0, &graphicsQueue);
-		vkGetDeviceQueue(device, 1, 0, &transferQueue);
-		vkGetDeviceQueue(device, 2, 0, &computeQueue);
+		vkCreateDevice(_device->physicalDevice, &createInfo, 0, &_device->device);
+		vkGetDeviceQueue(_device->device, 0, 0, &_device->graphicsQueue);
+		vkGetDeviceQueue(_device->device, 1, 0, &_device->transferQueue);
+		vkGetDeviceQueue(_device->device, 2, 0, &_device->computeQueue);
 
 		VkCommandPoolCreateInfo poolInfo;
 		memset(&poolInfo, 0, sizeof(VkCommandPoolCreateInfo));
 		poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 		poolInfo.queueFamilyIndex = 0;
 		poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-		vkCreateCommandPool(device, &poolInfo, 0, &graphicsCommandPool);
+		vkCreateCommandPool(_device->device, &poolInfo, 0, &_device->graphicsCommandPool);
 
 		poolInfo.queueFamilyIndex = 1;
-		vkCreateCommandPool(device, &poolInfo, 0, &transferCommandPool);
+		vkCreateCommandPool(_device->device, &poolInfo, 0, &_device->transferCommandPool);
 
 		poolInfo.queueFamilyIndex = 2;
-		vkCreateCommandPool(device, &poolInfo, 0, &computeCommandPool);
+		vkCreateCommandPool(_device->device, &poolInfo, 0, &_device->computeCommandPool);
 	}
 
 	// Create descriptor set pool
@@ -300,22 +306,24 @@ void computeCreateDevice()
 		poolInfo.poolSizeCount = sizeof(poolSizes) / sizeof(VkDescriptorPoolSize);
 		poolInfo.pPoolSizes = poolSizes;
 		poolInfo.maxSets = 32;
-		vkCreateDescriptorPool(device, &poolInfo, 0, &descriptorPool);
+		vkCreateDescriptorPool(_device->device, &poolInfo, 0, &_device->descriptorPool);
 	}
 
 	if(DEBUG_MARKERS)
 	{
-		vkSetDebugUtilsObjectName = (PFN_vkSetDebugUtilsObjectNameEXT) vkGetDeviceProcAddr(device, 
+		vkSetDebugUtilsObjectName = (PFN_vkSetDebugUtilsObjectNameEXT) vkGetDeviceProcAddr(_device->device, 
 				"vkSetDebugUtilsObjectNameEXT");
-		vkSetDebugUtilsObjectTag = (PFN_vkSetDebugUtilsObjectTagEXT) vkGetDeviceProcAddr(device, 
+		vkSetDebugUtilsObjectTag = (PFN_vkSetDebugUtilsObjectTagEXT) vkGetDeviceProcAddr(_device->device, 
 				"vkSetDebugUtilsObjectTagEXT");
-		vkCmdBeginDebugUtilsLabel = (PFN_vkCmdBeginDebugUtilsLabelEXT) vkGetDeviceProcAddr(device, 
+		vkCmdBeginDebugUtilsLabel = (PFN_vkCmdBeginDebugUtilsLabelEXT) vkGetDeviceProcAddr(_device->device, 
 				"vkCmdBeginDebugUtilsLabelEXT");
-		vkCmdEndDebugUtilsLabel = (PFN_vkCmdEndDebugUtilsLabelEXT) vkGetDeviceProcAddr(device, 
+		vkCmdEndDebugUtilsLabel = (PFN_vkCmdEndDebugUtilsLabelEXT) vkGetDeviceProcAddr(_device->device, 
 				"vkCmdEndDebugUtilsLabelEXT");
-		vkCmdInsertDebugUtilsLabel = (PFN_vkCmdInsertDebugUtilsLabelEXT) vkGetDeviceProcAddr(device, 
+		vkCmdInsertDebugUtilsLabel = (PFN_vkCmdInsertDebugUtilsLabelEXT) vkGetDeviceProcAddr(_device->device, 
 				"vkCmdInsertDebugUtilsLabelEXT");
 	}
+
+	return result;
 }
 
 
@@ -340,46 +348,46 @@ static void *loadFile(const char *_name, size_t *_size)
 }
 
 
-void computeDestroyDevice()
+void computeDestroyDevice(Device *_device)
 {
-	vkDeviceWaitIdle(device);
-	vkDestroyCommandPool(device, graphicsCommandPool, 0);
-	vkDestroyCommandPool(device, transferCommandPool, 0);
-	vkDestroyCommandPool(device, computeCommandPool, 0);
-	vkDestroyDescriptorPool(device, descriptorPool, 0);
-	vkDestroyDevice(device, 0);
+	vkDeviceWaitIdle(_device->device);
+	vkDestroyCommandPool(_device->device, _device->graphicsCommandPool, 0);
+	vkDestroyCommandPool(_device->device, _device->transferCommandPool, 0);
+	vkDestroyCommandPool(_device->device, _device->computeCommandPool, 0);
+	vkDestroyDescriptorPool(_device->device, _device->descriptorPool, 0);
+	vkDestroyDevice(_device->device, 0);
 
 	if(VALIDATION_LAYER)
 	{
-		PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT = 
-			(PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-		vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, 0);
+		PFN_vkDestroyDebugUtilsMessengerEXT vkDestroyDebugUtilsMessengerEXT = (PFN_vkDestroyDebugUtilsMessengerEXT) 
+			vkGetInstanceProcAddr(_device->instance, "vkDestroyDebugUtilsMessengerEXT");
+		vkDestroyDebugUtilsMessengerEXT(_device->instance, _device->debugMessenger, 0);
 	}
 	
-	vkDestroyInstance(instance, 0);
+	vkDestroyInstance(_device->instance, 0);
 }
 
 
-void computeDestroyWorkflow(Compute *_compute)
+void computeDestroyWorkflow(Device *_device, Compute *_compute)
 {
 	for(VkBuffer &buffer : _compute->buffers)
-		vkDestroyBuffer(device, buffer, 0);
+		vkDestroyBuffer(_device->device, buffer, 0);
 	for(VkPipeline &pipeline : _compute->pipelines)
-		vkDestroyPipeline(device, pipeline, 0);
+		vkDestroyPipeline(_device->device, pipeline, 0);
 	for(VkShaderModule &module : _compute->shaderModules)
-		vkDestroyShaderModule(device, module, 0);
+		vkDestroyShaderModule(_device->device, module, 0);
 	for(VkDescriptorSetLayout &descLayout : _compute->descriptorLayouts)
-		vkDestroyDescriptorSetLayout(device, descLayout, 0);
+		vkDestroyDescriptorSetLayout(_device->device, descLayout, 0);
 	for(VkPipelineLayout &pipelineLayout : _compute->pipelineLayouts)
-		vkDestroyPipelineLayout(device, pipelineLayout, 0);
+		vkDestroyPipelineLayout(_device->device, pipelineLayout, 0);
 	for(VkFence &fence : _compute->fences)
-		vkDestroyFence(device, fence, 0);
+		vkDestroyFence(_device->device, fence, 0);
 	for(int i = 0; i < Access_Count; ++i)
 	{
 		if(_compute->memory[i].mapped)
-			vkUnmapMemory(device, _compute->memory[i].memory);
+			vkUnmapMemory(_device->device, _compute->memory[i].memory);
 		if(_compute->memory[i].memory != 0)
-			vkFreeMemory(device, _compute->memory[i].memory, 0);
+			vkFreeMemory(_device->device, _compute->memory[i].memory, 0);
 	}
 }
 
@@ -409,7 +417,7 @@ VkMemoryPropertyFlags accessToMemoryFlags(Access _access)
 	return mapping[_access];
 }
 
-void allocateMemory(Compute *_compute, const Description *_desc)
+void allocateMemory(Device *_device, Compute *_compute, const Description *_desc)
 {
 	VkBufferCreateInfo bufferInfo;
 	memset(&bufferInfo, 0, sizeof(VkBufferCreateInfo));
@@ -427,26 +435,27 @@ void allocateMemory(Compute *_compute, const Description *_desc)
 	for(int i = 0; i < Access_Count; ++i)
 	{
 		bufferInfo.usage = accessToBufferUsage(Access(i));
-		vkCreateBuffer(device, &bufferInfo, 0, &buffer);
-		vkGetBufferMemoryRequirements(device, buffer, &memory);
-		vkDestroyBuffer(device, buffer, 0);
+		vkCreateBuffer(_device->device, &bufferInfo, 0, &buffer);
+		vkGetBufferMemoryRequirements(_device->device, buffer, &memory);
+		vkDestroyBuffer(_device->device, buffer, 0);
 
-		allocInfo.memoryTypeIndex = findProperties(&memoryProperties, memory.memoryTypeBits, accessToMemoryFlags(Access(i)));
+		allocInfo.memoryTypeIndex = findProperties(&_device->memoryProperties, memory.memoryTypeBits, accessToMemoryFlags(Access(i)));
 		//printf("Memory type chosen: %d\n", allocInfo.memoryTypeIndex);
 
 		_compute->memory[i].alignment = memory.alignment;
 		allocInfo.allocationSize = _desc->parameters.poolSizes[i];
-		vkAllocateMemory(device, &allocInfo, 0, &_compute->memory[i].memory);
+		vkAllocateMemory(_device->device, &allocInfo, 0, &_compute->memory[i].memory);
 	}
 
 	// Map CPU memory
-	vkMapMemory(device, _compute->memory[Access_CPU_Read].memory, 0, VK_WHOLE_SIZE, 0, 
+	vkMapMemory(_device->device, _compute->memory[Access_CPU_Read].memory, 0, VK_WHOLE_SIZE, 0, 
 					(void **) &_compute->memory[Access_CPU_Read].mapped);
-	vkMapMemory(device, _compute->memory[Access_CPU_Write].memory, 0, VK_WHOLE_SIZE, 0,
+	vkMapMemory(_device->device, _compute->memory[Access_CPU_Write].memory, 0, VK_WHOLE_SIZE, 0,
 					(void **) &_compute->memory[Access_CPU_Write].mapped); 
 }
 
-void allocateCommandBuffers(VkCommandPool _commandPool, uint32_t _count, VkCommandBuffer *_commandBuffers)
+void allocateCommandBuffers(Device *_device, VkCommandPool _commandPool, 
+	uint32_t _count, VkCommandBuffer *_commandBuffers)
 {
 	VkCommandBufferAllocateInfo allocInfo;
 	memset(&allocInfo, 0, sizeof(VkCommandBufferAllocateInfo));
@@ -455,10 +464,11 @@ void allocateCommandBuffers(VkCommandPool _commandPool, uint32_t _count, VkComma
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = _count;
 
-	vkAllocateCommandBuffers(device, &allocInfo, _commandBuffers);
+	vkAllocateCommandBuffers(_device->device, &allocInfo, _commandBuffers);
 }
 
-void createShaderModule(Compute *_compute, const char *_filename, VkShaderModule *_module, const char *_name = "")
+void createShaderModule(Device *_device, Compute *_compute, 
+	const char *_filename, VkShaderModule *_module, const char *_name = "")
 {
 	size_t size = 0;
 	void *blob = loadFile(_filename, &size);
@@ -469,7 +479,7 @@ void createShaderModule(Compute *_compute, const char *_filename, VkShaderModule
 	createInfo.codeSize = size;
 	createInfo.pCode = (const uint32_t*) blob;
 
-	vkCreateShaderModule(device, &createInfo, 0, _module);
+	vkCreateShaderModule(_device->device, &createInfo, 0, _module);
 	_compute->shaderModules.push_back(*_module);
 
 	free(blob);
@@ -482,32 +492,34 @@ void createShaderModule(Compute *_compute, const char *_filename, VkShaderModule
 		nameInfo.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
 		nameInfo.objectHandle = (uint64_t) *_module;
 		nameInfo.pObjectName = _name;
-		vkSetDebugUtilsObjectName(device, &nameInfo);
+		vkSetDebugUtilsObjectName(_device->device, &nameInfo);
 	}
 }
 
-void createFence(Compute *_compute, VkFence *_fence)
+void createFence(Device *_device, Compute *_compute, VkFence *_fence)
 {
 	VkFenceCreateInfo createInfo;
 	memset(&createInfo, 0, sizeof(VkFenceCreateInfo));
 	createInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	createInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-	vkCreateFence(device, &createInfo, 0, _fence);
+	vkCreateFence(_device->device, &createInfo, 0, _fence);
 	_compute->fences.push_back(*_fence);
 }
 
-void createDescriptorLayout(Compute *_compute, const VkDescriptorSetLayoutBinding *_bindings, int _count, VkDescriptorSetLayout *_descriptorLayout)
+void createDescriptorLayout(Device *_device, Compute *_compute, 
+	const VkDescriptorSetLayoutBinding *_bindings, int _count, VkDescriptorSetLayout *_descriptorLayout)
 {
 	VkDescriptorSetLayoutCreateInfo descriptorCreateInfo;
 	memset(&descriptorCreateInfo, 0, sizeof(VkDescriptorSetLayoutCreateInfo));
 	descriptorCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 	descriptorCreateInfo.bindingCount = _count;
 	descriptorCreateInfo.pBindings = _bindings;
-	vkCreateDescriptorSetLayout(device, &descriptorCreateInfo, 0, _descriptorLayout);
+	vkCreateDescriptorSetLayout(_device->device, &descriptorCreateInfo, 0, _descriptorLayout);
 	_compute->descriptorLayouts.push_back(*_descriptorLayout);
 }
 
-void createComputePipeline(Compute *_compute, const VkShaderModule *_module, const VkPipelineLayout *_layout, VkPipeline *_pipeline)
+void createComputePipeline(Device *_device, Compute *_compute, 
+	const VkShaderModule *_module, const VkPipelineLayout *_layout, VkPipeline *_pipeline)
 {
 	VkPipelineShaderStageCreateInfo shaderStage;
 	memset(&shaderStage, 0, sizeof(shaderStage));
@@ -523,11 +535,12 @@ void createComputePipeline(Compute *_compute, const VkShaderModule *_module, con
 	pipelineInfo.layout = *_layout;
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 	pipelineInfo.basePipelineIndex = -1;
-	vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, 0, _pipeline);
+	vkCreateComputePipelines(_device->device, VK_NULL_HANDLE, 1, &pipelineInfo, 0, _pipeline);
 	_compute->pipelines.push_back(*_pipeline);
 }
 
-void createPipelineLayout(Compute *_compute, const VkDescriptorSetLayout *_descriptorLayout, VkPipelineLayout *_pipelineLayout)
+void createPipelineLayout(Device *_device, Compute *_compute, 
+	const VkDescriptorSetLayout *_descriptorLayout, VkPipelineLayout *_pipelineLayout)
 {
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo;
 	memset(&pipelineLayoutInfo, 0, sizeof(VkPipelineLayoutCreateInfo));
@@ -536,12 +549,12 @@ void createPipelineLayout(Compute *_compute, const VkDescriptorSetLayout *_descr
 	pipelineLayoutInfo.pSetLayouts = _descriptorLayout;
 	pipelineLayoutInfo.pushConstantRangeCount = 0;
 	pipelineLayoutInfo.pPushConstantRanges = 0;
-	vkCreatePipelineLayout(device, &pipelineLayoutInfo, 0, _pipelineLayout);
+	vkCreatePipelineLayout(_device->device, &pipelineLayoutInfo, 0, _pipelineLayout);
 	_compute->pipelineLayouts.push_back(*_pipelineLayout);
 }
 
-void createBuffer(Compute *_compute, VkDeviceSize _size, Access _access, 
-					VkBuffer *_buffer, VkDeviceSize *_offset, const char *_name = "")
+void createBuffer(Device *_device, Compute *_compute, VkDeviceSize _size, Access _access, 
+	VkBuffer *_buffer, VkDeviceSize *_offset, const char *_name = "")
 {
 	VkBufferCreateInfo bufferInfo;
 	memset(&bufferInfo, 0, sizeof(VkBufferCreateInfo));
@@ -549,11 +562,11 @@ void createBuffer(Compute *_compute, VkDeviceSize _size, Access _access,
 	bufferInfo.size = _size;
 	bufferInfo.usage = accessToBufferUsage(_access);
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	vkCreateBuffer(device, &bufferInfo, 0, _buffer);
+	vkCreateBuffer(_device->device, &bufferInfo, 0, _buffer);
 	_compute->buffers.push_back(*_buffer);
 
 	Memory *memory = _compute->memory + _access;
-	vkBindBufferMemory(device, *_buffer, memory->memory, memory->offset);
+	vkBindBufferMemory(_device->device, *_buffer, memory->memory, memory->offset);
 	*_offset = memory->offset;
 
 	// Keep next offset aligned
@@ -568,8 +581,33 @@ void createBuffer(Compute *_compute, VkDeviceSize _size, Access _access,
 		nameInfo.objectType = VK_OBJECT_TYPE_BUFFER;
 		nameInfo.objectHandle = (uint64_t) *_buffer;
 		nameInfo.pObjectName = _name;
-		vkSetDebugUtilsObjectName(device, &nameInfo);
+		vkSetDebugUtilsObjectName(_device->device, &nameInfo);
 	}
+}
+
+void transferQueueOwnership(Compute *_compute)
+{
+	// Queue family ownership transfer
+	/*
+	VkBufferMemoryBarrier barrier;
+	memset(&barrier, 0, sizeof(VkBufferMemoryBarrier));
+	barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+
+	if(DEBUG_MARKERS)
+	{
+		VkDebugUtilsLabelEXT labelInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
+			0, "Buffer Memory Barrier", { 1.0f, 0.0f, 0.0f, 1.0f }};
+		vkCmdBeginDebugUtilsLabel(_transferCmdBuffer, &labelInfo);
+	}
+
+	vkCmdPipelineBarrier(_transferCmdBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &barrier, 0, 0);
+
+	if(DEBUG_MARKERS)
+	{
+		vkCmdEndDebugUtilsLabel(_transferCmdBuffer);
+	}
+	*/
 }
 
 void createTransferCommand(Compute *_compute, VkCommandBuffer _transferCmdBuffer, 
@@ -667,7 +705,7 @@ void createAIOCommands(Compute *_compute, AIOCmdBuffer *_aioCmdBuffer, const std
 	}
 }
 
-int computeCompileWorkflow(Compute *_compute, const Description *_desc,
+int computeCompileWorkflow(Device *_device, Compute *_compute, const Description *_desc,
 					VkCommandBuffer _graphicsCmdBuffers[2], VkCommandBuffer _transferCmdBuffers[2],
 					VkCommandBuffer _transferUniqueCmdBuffers[2], VkCommandBuffer _computeCmdBuffers[2],
 					std::vector<AIOWorkload> *_aioWorkload, std::vector<AIOWorkload> *_aioUniqueWorkload)
@@ -675,13 +713,13 @@ int computeCompileWorkflow(Compute *_compute, const Description *_desc,
 	int iterations = -1;
 
 	// Allocate memory
-	allocateMemory(_compute, _desc);
+	allocateMemory(_device, _compute, _desc);
 
 	// Allocate command buffers
-	allocateCommandBuffers(graphicsCommandPool, 2, _graphicsCmdBuffers);
-	allocateCommandBuffers(transferCommandPool, 2, _transferCmdBuffers);
-	allocateCommandBuffers(transferCommandPool, 2, _transferUniqueCmdBuffers);
-	allocateCommandBuffers(computeCommandPool, 2, _computeCmdBuffers);
+	allocateCommandBuffers(_device, _device->graphicsCommandPool, 2, _graphicsCmdBuffers);
+	allocateCommandBuffers(_device, _device->transferCommandPool, 2, _transferCmdBuffers);
+	allocateCommandBuffers(_device, _device->transferCommandPool, 2, _transferUniqueCmdBuffers);
+	allocateCommandBuffers(_device, _device->computeCommandPool, 2, _computeCmdBuffers);
 
 	VkDescriptorBufferInfo bufferInfos[2][256];
 	VkWriteDescriptorSet descriptorWrites[2][256];
@@ -734,7 +772,7 @@ int computeCompileWorkflow(Compute *_compute, const Description *_desc,
 		{
 			VkBuffer buffer;
 			VkDeviceSize offset;
-			createBuffer(_compute, item->size, Access_GPU_ReadWrite, &buffer, &offset, 
+			createBuffer(_device, _compute, item->size, Access_GPU_ReadWrite, &buffer, &offset, 
 							buildName(debugName, item->name, "_GPU_ReadWrite"));
 
 			bufferInfos[0][i].buffer = bufferInfos[1][i].buffer = buffer;
@@ -747,7 +785,7 @@ int computeCompileWorkflow(Compute *_compute, const Description *_desc,
 			{
 				VkBuffer sbuffer;
 				VkDeviceSize offsets[2];
-				createBuffer(_compute, item->size, Access_CPU_Write, &sbuffer, &offsets[0], 
+				createBuffer(_device, _compute, item->size, Access_CPU_Write, &sbuffer, &offsets[0], 
 								buildName(debugName, item->name, "_CPU_Write"));
 
 				offsets[1] = offsets[0];
@@ -755,7 +793,7 @@ int computeCompileWorkflow(Compute *_compute, const Description *_desc,
 			
 				VkBuffer buffer;
 				VkDeviceSize offset;
-				createBuffer(_compute, item->size, Access_GPU_Read, &buffer, &offset, 
+				createBuffer(_device, _compute, item->size, Access_GPU_Read, &buffer, &offset, 
 								buildName(debugName, item->name, "_GPU_Read"));
 
 				float color[4] = { 1.0f, 0.4f, 0.4f, 1.0f };
@@ -769,7 +807,7 @@ int computeCompileWorkflow(Compute *_compute, const Description *_desc,
 			{
 				VkBuffer sbuffer;
 				VkDeviceSize offsets[2];
-				createBuffer(_compute, item->size, Access_CPU_Read, &sbuffer, &offsets[0],
+				createBuffer(_device, _compute, item->size, Access_CPU_Read, &sbuffer, &offsets[0],
 								buildName(debugName, item->name, "_CPU_Read"));
 
 				offsets[1] = offsets[0];
@@ -777,7 +815,7 @@ int computeCompileWorkflow(Compute *_compute, const Description *_desc,
 
 				VkBuffer buffer;
 				VkDeviceSize offset;
-				createBuffer(_compute, item->size, Access_GPU_Write, &buffer, &offset, 
+				createBuffer(_device, _compute, item->size, Access_GPU_Write, &buffer, &offset, 
 								buildName(debugName, item->name, "_GPU_Write"));
 
 				float color[4] = { 0.4f, 0.4f, 1.0f, 1.0f };
@@ -794,16 +832,16 @@ int computeCompileWorkflow(Compute *_compute, const Description *_desc,
 			{
 				VkBuffer sbuffer[2];
 				VkDeviceSize offsets[2];
-				createBuffer(_compute, item->size, Access_CPU_Write, &sbuffer[0], &offsets[0], 
+				createBuffer(_device, _compute, item->size, Access_CPU_Write, &sbuffer[0], &offsets[0], 
 								buildName(debugName, item->name, "_CPU_Write_0"));
-				createBuffer(_compute, item->size, Access_CPU_Write, &sbuffer[1], &offsets[1], 
+				createBuffer(_device, _compute, item->size, Access_CPU_Write, &sbuffer[1], &offsets[1], 
 								buildName(debugName, item->name, "_CPU_Write_1"));
 				createAIOWorkload(_aioWorkload, item->path, true, Access_CPU_Write, offsets, item->size, iterations);
 			
 				VkBuffer buffer[2];
-				createBuffer(_compute, item->size, Access_GPU_Read, &buffer[0], &offsets[0], 
+				createBuffer(_device, _compute, item->size, Access_GPU_Read, &buffer[0], &offsets[0], 
 								buildName(debugName, item->name, "_GPU_Read_0"));
-				createBuffer(_compute, item->size, Access_GPU_Read, &buffer[1], &offsets[1],
+				createBuffer(_device, _compute, item->size, Access_GPU_Read, &buffer[1], &offsets[1],
 								buildName(debugName, item->name, "_GPU_Read_1"));
 
 				float color[4] = { 1.0f, 0.4f, 0.4f, 1.0f };
@@ -818,22 +856,23 @@ int computeCompileWorkflow(Compute *_compute, const Description *_desc,
 			{
 				VkBuffer sbuffer[2];
 				VkDeviceSize offsets[2];
-				createBuffer(_compute, item->size, Access_CPU_Read, &sbuffer[0], &offsets[0], 
+				createBuffer(_device, _compute, item->size, Access_CPU_Read, &sbuffer[0], &offsets[0], 
 								buildName(debugName, item->name, "_CPU_Read_0"));
-				createBuffer(_compute, item->size, Access_CPU_Read, &sbuffer[1], &offsets[1], 
+				createBuffer(_device, _compute, item->size, Access_CPU_Read, &sbuffer[1], &offsets[1], 
 								buildName(debugName, item->name, "_CPU_Read_1"));
 				createAIOWorkload(_aioWorkload, item->path, true, Access_CPU_Read, offsets, item->size, iterations);
 
 				VkBuffer buffer[2];
-				createBuffer(_compute, item->size, Access_GPU_Write, &buffer[0], &offsets[0],
+				createBuffer(_device, _compute, item->size, Access_GPU_Write, &buffer[0], &offsets[0],
 								buildName(debugName, item->name, "_GPU_Write_0"));
-				createBuffer(_compute, item->size, Access_GPU_Write, &buffer[1], &offsets[1], 
+				createBuffer(_device, _compute, item->size, Access_GPU_Write, &buffer[1], &offsets[1], 
 								buildName(debugName, item->name, "_GPU_Write_1"));
 			
 				float color[4] = { 0.4f, 0.4f, 1.0f, 1.0f };
 				createTransferCommand(_compute, _transferCmdBuffers[0], buffer[1], sbuffer[1], item->size, item->name, color);
 				createTransferCommand(_compute, _transferCmdBuffers[1], buffer[0], sbuffer[0], item->size, item->name, color);
 
+				
 				bufferInfos[0][i].buffer = buffer[0]; bufferInfos[1][i].buffer = buffer[1];
 				bufferInfos[0][i].offset = bufferInfos[1][i].offset = 0;
 				bufferInfos[0][i].range = bufferInfos[1][i].range = item-> size;
@@ -869,27 +908,27 @@ int computeCompileWorkflow(Compute *_compute, const Description *_desc,
 	vkEndCommandBuffer(_transferUniqueCmdBuffers[1]);
 
 	VkDescriptorSetLayout descriptorLayout;
-	createDescriptorLayout(_compute, descriptorBindings, count, &descriptorLayout);
+	createDescriptorLayout(_device, _compute, descriptorBindings, count, &descriptorLayout);
 
 	VkDescriptorSetAllocateInfo allocInfo;
 	memset(&allocInfo, 0, sizeof(VkDescriptorSetAllocateInfo));
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.descriptorPool = descriptorPool;
+	allocInfo.descriptorPool = _device->descriptorPool;
 	allocInfo.descriptorSetCount = 1;
 	allocInfo.pSetLayouts = &descriptorLayout;
-	vkAllocateDescriptorSets(device, &allocInfo, &computeDescriptors[0]);
-	vkAllocateDescriptorSets(device, &allocInfo, &computeDescriptors[1]);
+	vkAllocateDescriptorSets(_device->device, &allocInfo, &_compute->computeDescriptors[0]);
+	vkAllocateDescriptorSets(_device->device, &allocInfo, &_compute->computeDescriptors[1]);
 
 	for(int i = 0; i < count; ++i)
 	{
-		descriptorWrites[0][i].dstSet = computeDescriptors[0];
-		descriptorWrites[1][i].dstSet = computeDescriptors[1];
+		descriptorWrites[0][i].dstSet = _compute->computeDescriptors[0];
+		descriptorWrites[1][i].dstSet = _compute->computeDescriptors[1];
 	}
-	vkUpdateDescriptorSets(device, count, descriptorWrites[0], 0, 0);
-	vkUpdateDescriptorSets(device, count, descriptorWrites[1], 0, 0);
+	vkUpdateDescriptorSets(_device->device, count, descriptorWrites[0], 0, 0);
+	vkUpdateDescriptorSets(_device->device, count, descriptorWrites[1], 0, 0);
 
 	VkPipelineLayout pipelineLayout;
-	createPipelineLayout(_compute, &descriptorLayout, &pipelineLayout);
+	createPipelineLayout(_device, _compute, &descriptorLayout, &pipelineLayout);
 
 	// ------- Iterate over JSON program -------------------------------------------------------------
 
@@ -914,18 +953,18 @@ int computeCompileWorkflow(Compute *_compute, const Description *_desc,
 		const Program *item = _desc->programList + i;
 
 		VkShaderModule module;
-		createShaderModule(_compute, item->path, &module, item->path);
+		createShaderModule(_device, _compute, item->path, &module, item->path);
 
 		VkPipeline pipeline;
-		createComputePipeline(_compute, &module, &pipelineLayout, &pipeline);
+		createComputePipeline(_device, _compute, &module, &pipelineLayout, &pipeline);
 
 		vkCmdBindPipeline(_graphicsCmdBuffers[0], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 		vkCmdBindPipeline(_graphicsCmdBuffers[1], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 
 		vkCmdBindDescriptorSets(_graphicsCmdBuffers[0], VK_PIPELINE_BIND_POINT_COMPUTE, 
-			pipelineLayout, 0, 1, &computeDescriptors[0], 0, 0);
+			pipelineLayout, 0, 1, &_compute->computeDescriptors[0], 0, 0);
 		vkCmdBindDescriptorSets(_graphicsCmdBuffers[1], VK_PIPELINE_BIND_POINT_COMPUTE, 
-			pipelineLayout, 0, 1, &computeDescriptors[1], 0, 0);
+			pipelineLayout, 0, 1, &_compute->computeDescriptors[1], 0, 0);
 
 		if(DEBUG_MARKERS)
 		{
@@ -1001,8 +1040,9 @@ int main(int argc, char *argv[])
 		assert(ret == 1);
 	}
 
+	Device device;
 	Compute compute;
-	computeCreateDevice();
+	computeCreateDevice(&device);
 	AIO *aio = aioCreate(256);
 
 	//const Description *desc = descCreateFromFile("data/sha256.json");
@@ -1016,7 +1056,7 @@ int main(int argc, char *argv[])
 		VkCommandBuffer computeCmdBuffers[2];
 		std::vector<AIOWorkload> aioWorkload;
 		std::vector<AIOWorkload> aioUniqueWorkload;
-		int count = computeCompileWorkflow(&compute, desc, graphicsCmdBuffers, transferCmdBuffers, 
+		int count = computeCompileWorkflow(&device, &compute, desc, graphicsCmdBuffers, transferCmdBuffers,
 				transferUniqueCmdBuffers, computeCmdBuffers, &aioWorkload, &aioUniqueWorkload);
 
 		VkSubmitInfo graphicsSubmit;
@@ -1029,9 +1069,9 @@ int main(int argc, char *argv[])
 		VkFence graphicsFences[2], transferFences[2], computeFences[2];
 		for(int i = 0; i < 2; ++i)
 		{
-			createFence(&compute, &graphicsFences[i]);
-			createFence(&compute, &transferFences[i]);
-			createFence(&compute, &computeFences[i]);
+			createFence(&device, &compute, &graphicsFences[i]);
+			createFence(&device, &compute, &transferFences[i]);
+			createFence(&device, &compute, &computeFences[i]);
 		}
 
 		std::vector<double> timings;
@@ -1104,17 +1144,17 @@ int main(int argc, char *argv[])
 			}
 
 			// TODO check if semaphore is needed between the transfer and compute queue
-			vkWaitForFences(device, 1, &transferFences[lsb], VK_TRUE, UINT64_MAX);
-			vkResetFences(device, 1, &transferFences[lsb]);
+			vkWaitForFences(device.device, 1, &transferFences[lsb], VK_TRUE, UINT64_MAX);
+			vkResetFences(device.device, 1, &transferFences[lsb]);
 
 			aioWaitIdle(aio);
 			aioSubmitCmdBuffer(aio, aioCmdBuffers[lsb]);
 
-			vkQueueSubmit(transferQueue, 1, &transferSubmit, transferFences[lsb]);
+			vkQueueSubmit(device.transferQueue, 1, &transferSubmit, transferFences[lsb]);
 
-			vkWaitForFences(device, 1, &graphicsFences[lsb], VK_TRUE, UINT64_MAX);
-			vkResetFences(device, 1, &graphicsFences[lsb]);
-			vkQueueSubmit(graphicsQueue, 1, &graphicsSubmit, graphicsFences[lsb]);
+			vkWaitForFences(device.device, 1, &graphicsFences[lsb], VK_TRUE, UINT64_MAX);
+			vkResetFences(device.device, 1, &graphicsFences[lsb]);
+			vkQueueSubmit(device.graphicsQueue, 1, &graphicsSubmit, graphicsFences[lsb]);
 			
 			if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
 			
@@ -1123,8 +1163,8 @@ int main(int argc, char *argv[])
 			timings.push_back(clockDeltaTime(&start, &stop));
 		}
 
-		vkQueueWaitIdle(graphicsQueue);
-		vkQueueWaitIdle(transferQueue);
+		vkQueueWaitIdle(device.graphicsQueue);
+		vkQueueWaitIdle(device.transferQueue);
 
 		aioWaitIdle(aio);
 		aioFreeCmdBuffer(aioCmdBuffers[0]);
@@ -1143,8 +1183,8 @@ int main(int argc, char *argv[])
 		printf("[summary] total = %f, mean = %f, sigma = %f\n", total, mean, sqrt(variance));
 	}
 
-	computeDestroyWorkflow(&compute);
-	computeDestroyDevice();
+	computeDestroyWorkflow(&device, &compute);
+	computeDestroyDevice(&device);
 	aioDestroy(aio);
 
 	return 0;
