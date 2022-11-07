@@ -51,6 +51,15 @@ struct Device
 	VkQueue computeQueue;
 };
 
+struct AIOWorkload
+{
+	std::vector<std::string> files;
+	std::string path;
+	VkDeviceSize offset[2];
+	VkDeviceSize size;
+	Access access;
+};
+
 struct Memory
 {
 	VkDeviceMemory memory;
@@ -61,7 +70,15 @@ struct Memory
 
 struct Compute
 {
-	Memory memory[Access_Count]= {0};
+	VkCommandBuffer graphicsCmdBuffers[2];
+	VkCommandBuffer graphicsQFOTCmdBuffers[2];
+	VkCommandBuffer transferCmdBuffers[2];
+	VkCommandBuffer transferUniqueCmdBuffers[2];
+	VkCommandBuffer computeCmdBuffers[2];
+	std::vector<AIOWorkload> aioWorkload;
+	std::vector<AIOWorkload> aioUniqueWorkload;
+
+	Memory memory[Access_Count] = {0};
 	VkDescriptorSet computeDescriptors[2];
 	std::vector<VkBuffer> buffers;
 	std::vector<VkPipeline> pipelines;
@@ -71,14 +88,6 @@ struct Compute
 	std::vector<VkFence> fences;
 };
 
-struct AIOWorkload
-{
-	std::vector<std::string> files;
-	std::string path;
-	VkDeviceSize offset[2];
-	VkDeviceSize size;
-	Access access;
-};
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 							VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -585,34 +594,54 @@ void createBuffer(Device *_device, Compute *_compute, VkDeviceSize _size, Access
 	}
 }
 
-void transferQueueOwnership(Compute *_compute)
+void transferQueueOwnership(VkCommandBuffer _cmdBuffer, bool _acquire, Access _access, uint32_t _srcIndex, uint32_t _dstIndex, VkBuffer _buffer, VkDeviceSize _size)
 {
 	// Queue family ownership transfer
-	/*
 	VkBufferMemoryBarrier barrier;
 	memset(&barrier, 0, sizeof(VkBufferMemoryBarrier));
 	barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+	barrier.srcQueueFamilyIndex = _srcIndex;
+	barrier.dstQueueFamilyIndex = _dstIndex;
+	barrier.buffer = _buffer;
+	barrier.offset = 0;
+	barrier.size = _size;
+
+	VkPipelineStageFlags srcStage;
+	VkPipelineStageFlags dstStage;
+
+	switch(_access)
+	{
+		case Access_GPU_Read:
+			srcStage = _acquire ? VK_PIPELINE_STAGE_NONE : VK_PIPELINE_STAGE_TRANSFER_BIT;
+			dstStage = _acquire ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_NONE;
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+			break;
+		case Access_GPU_Write:
+			srcStage = _acquire ? VK_PIPELINE_STAGE_NONE : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+			dstStage = _acquire ? VK_PIPELINE_STAGE_TRANSFER_BIT : VK_PIPELINE_STAGE_NONE;
+			barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+			break;
+	}
 
 	if(DEBUG_MARKERS)
 	{
 		VkDebugUtilsLabelEXT labelInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
 			0, "Buffer Memory Barrier", { 1.0f, 0.0f, 0.0f, 1.0f }};
-		vkCmdBeginDebugUtilsLabel(_transferCmdBuffer, &labelInfo);
+		vkCmdBeginDebugUtilsLabel(_cmdBuffer, &labelInfo);
 	}
 
-	vkCmdPipelineBarrier(_transferCmdBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
-			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, 0, 1, &barrier, 0, 0);
+	vkCmdPipelineBarrier(_cmdBuffer, srcStage, dstStage, 0, 0, 0, 1, &barrier, 0, 0);
 
 	if(DEBUG_MARKERS)
 	{
-		vkCmdEndDebugUtilsLabel(_transferCmdBuffer);
+		vkCmdEndDebugUtilsLabel(_cmdBuffer);
 	}
-	*/
 }
 
-void createTransferCommand(Compute *_compute, VkCommandBuffer _transferCmdBuffer, 
-							VkBuffer _source, VkBuffer _dest, VkDeviceSize _size,
-							const char *_name, float _color[4])
+void createTransferCommand(VkCommandBuffer _transferCmdBuffer, VkBuffer _source, VkBuffer _dest, 
+							VkDeviceSize _size,	const char *_name, float _color[4])
 {
 	if(DEBUG_MARKERS)
 	{
@@ -705,10 +734,7 @@ void createAIOCommands(Compute *_compute, AIOCmdBuffer *_aioCmdBuffer, const std
 	}
 }
 
-int computeCompileWorkflow(Device *_device, Compute *_compute, const Description *_desc,
-					VkCommandBuffer _graphicsCmdBuffers[2], VkCommandBuffer _transferCmdBuffers[2],
-					VkCommandBuffer _transferUniqueCmdBuffers[2], VkCommandBuffer _computeCmdBuffers[2],
-					std::vector<AIOWorkload> *_aioWorkload, std::vector<AIOWorkload> *_aioUniqueWorkload)
+int computeCompileWorkflow(Device *_device, Compute *_compute, const Description *_desc)
 {
 	int iterations = -1;
 
@@ -716,10 +742,11 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 	allocateMemory(_device, _compute, _desc);
 
 	// Allocate command buffers
-	allocateCommandBuffers(_device, _device->graphicsCommandPool, 2, _graphicsCmdBuffers);
-	allocateCommandBuffers(_device, _device->transferCommandPool, 2, _transferCmdBuffers);
-	allocateCommandBuffers(_device, _device->transferCommandPool, 2, _transferUniqueCmdBuffers);
-	allocateCommandBuffers(_device, _device->computeCommandPool, 2, _computeCmdBuffers);
+	allocateCommandBuffers(_device, _device->graphicsCommandPool, 2, _compute->graphicsCmdBuffers);
+	allocateCommandBuffers(_device, _device->graphicsCommandPool, 2, _compute->graphicsQFOTCmdBuffers);
+	allocateCommandBuffers(_device, _device->transferCommandPool, 2, _compute->transferCmdBuffers);
+	allocateCommandBuffers(_device, _device->transferCommandPool, 2, _compute->transferUniqueCmdBuffers);
+	allocateCommandBuffers(_device, _device->computeCommandPool, 2, _compute->computeCmdBuffers);
 
 	VkDescriptorBufferInfo bufferInfos[2][256];
 	VkWriteDescriptorSet descriptorWrites[2][256];
@@ -742,22 +769,22 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = 0; //VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	beginInfo.pInheritanceInfo = 0; // Optional
-	vkBeginCommandBuffer(_transferCmdBuffers[0], &beginInfo);
-	vkBeginCommandBuffer(_transferCmdBuffers[1], &beginInfo);
-	vkBeginCommandBuffer(_transferUniqueCmdBuffers[0], &beginInfo);
-	vkBeginCommandBuffer(_transferUniqueCmdBuffers[1], &beginInfo);
+	vkBeginCommandBuffer(_compute->transferCmdBuffers[0], &beginInfo);
+	vkBeginCommandBuffer(_compute->transferCmdBuffers[1], &beginInfo);
+	vkBeginCommandBuffer(_compute->transferUniqueCmdBuffers[0], &beginInfo);
+	vkBeginCommandBuffer(_compute->transferUniqueCmdBuffers[1], &beginInfo);
 
 	if(DEBUG_MARKERS)
 	{
 		VkDebugUtilsLabelEXT labelInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
 			0, "Transfer Cmds", { 0.7f, 0.7f, 0.7f, 1.0f }};
-		vkCmdBeginDebugUtilsLabel(_transferCmdBuffers[0], &labelInfo);
-		vkCmdBeginDebugUtilsLabel(_transferCmdBuffers[1], &labelInfo);
+		vkCmdBeginDebugUtilsLabel(_compute->transferCmdBuffers[0], &labelInfo);
+		vkCmdBeginDebugUtilsLabel(_compute->transferCmdBuffers[1], &labelInfo);
 
 		VkDebugUtilsLabelEXT labelInfo2 = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
 			0, "Transfer Unique Cmds", { 0.6f, 0.6f, 0.6f, 1.0f }};
-		vkCmdBeginDebugUtilsLabel(_transferUniqueCmdBuffers[0], &labelInfo2);
-		vkCmdBeginDebugUtilsLabel(_transferUniqueCmdBuffers[1], &labelInfo2);
+		vkCmdBeginDebugUtilsLabel(_compute->transferUniqueCmdBuffers[0], &labelInfo2);
+		vkCmdBeginDebugUtilsLabel(_compute->transferUniqueCmdBuffers[1], &labelInfo2);
 	}
 
 	iterations = _desc->parameters.iterations;
@@ -789,7 +816,7 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 								buildName(debugName, item->name, "_CPU_Write"));
 
 				offsets[1] = offsets[0];
-				createAIOWorkload(_aioUniqueWorkload, item->path, false, Access_CPU_Write, offsets, item->size, iterations);
+				createAIOWorkload(&_compute->aioUniqueWorkload, item->path, false, Access_CPU_Write, offsets, item->size, iterations);
 			
 				VkBuffer buffer;
 				VkDeviceSize offset;
@@ -797,7 +824,7 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 								buildName(debugName, item->name, "_GPU_Read"));
 
 				float color[4] = { 1.0f, 0.4f, 0.4f, 1.0f };
-				createTransferCommand(_compute, _transferUniqueCmdBuffers[0], sbuffer, buffer, item->size, item->name, color);
+				createTransferCommand(_compute->transferUniqueCmdBuffers[0], sbuffer, buffer, item->size, item->name, color);
 
 				bufferInfos[0][i].buffer = bufferInfos[1][i].buffer = buffer;
 				bufferInfos[0][i].offset = bufferInfos[1][i].offset = 0;
@@ -811,7 +838,7 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 								buildName(debugName, item->name, "_CPU_Read"));
 
 				offsets[1] = offsets[0];
-				createAIOWorkload(_aioUniqueWorkload, item->path, false, Access_CPU_Read, offsets, item->size, iterations);
+				createAIOWorkload(&_compute->aioUniqueWorkload, item->path, false, Access_CPU_Read, offsets, item->size, iterations);
 
 				VkBuffer buffer;
 				VkDeviceSize offset;
@@ -819,7 +846,7 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 								buildName(debugName, item->name, "_GPU_Write"));
 
 				float color[4] = { 0.4f, 0.4f, 1.0f, 1.0f };
-				createTransferCommand(_compute, _transferUniqueCmdBuffers[1], buffer, sbuffer, item->size, item->name, color);
+				createTransferCommand(_compute->transferUniqueCmdBuffers[1], buffer, sbuffer, item->size, item->name, color);
 
 				bufferInfos[0][i].buffer = bufferInfos[1][i].buffer = buffer;
 				bufferInfos[0][i].offset = bufferInfos[1][i].offset = 0;
@@ -836,7 +863,7 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 								buildName(debugName, item->name, "_CPU_Write_0"));
 				createBuffer(_device, _compute, item->size, Access_CPU_Write, &sbuffer[1], &offsets[1], 
 								buildName(debugName, item->name, "_CPU_Write_1"));
-				createAIOWorkload(_aioWorkload, item->path, true, Access_CPU_Write, offsets, item->size, iterations);
+				createAIOWorkload(&_compute->aioWorkload, item->path, true, Access_CPU_Write, offsets, item->size, iterations);
 			
 				VkBuffer buffer[2];
 				createBuffer(_device, _compute, item->size, Access_GPU_Read, &buffer[0], &offsets[0], 
@@ -845,8 +872,13 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 								buildName(debugName, item->name, "_GPU_Read_1"));
 
 				float color[4] = { 1.0f, 0.4f, 0.4f, 1.0f };
-				createTransferCommand(_compute, _transferCmdBuffers[0], sbuffer[1], buffer[1], item->size, item->name, color);
-				createTransferCommand(_compute, _transferCmdBuffers[1], sbuffer[0], buffer[0], item->size, item->name, color);
+				createTransferCommand(_compute->transferCmdBuffers[0], sbuffer[1], buffer[1], item->size, item->name, color);
+				//transferQueueOwnership(_compute->transferCmdBuffers[0], false, Access_GPU_Read, _device->transferIndex, _device->graphicsIndex, buffer[1], item->size);
+				//transferQueueOwnership(_compute->graphicsCmdBuffers[0], true, Access_GPU_Read, _device->transferIndex, _device->graphicsIndex, buffer[1], item->size);
+
+				createTransferCommand(_compute->transferCmdBuffers[1], sbuffer[0], buffer[0], item->size, item->name, color);
+				//transferQueueOwnership(_compute->transferCmdBuffers[1], false, Access_GPU_Read, _device->transferIndex, _device->graphicsIndex, buffer[0], item->size);
+				//transferQueueOwnership(_compute->graphicsCmdBuffers[1], true, Access_GPU_Read, _device->transferIndex, _device->graphicsIndex, buffer[0], item->size);
 
 				bufferInfos[0][i].buffer = buffer[0]; bufferInfos[1][i].buffer = buffer[1];
 				bufferInfos[0][i].offset = bufferInfos[1][i].offset = 0;
@@ -860,7 +892,7 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 								buildName(debugName, item->name, "_CPU_Read_0"));
 				createBuffer(_device, _compute, item->size, Access_CPU_Read, &sbuffer[1], &offsets[1], 
 								buildName(debugName, item->name, "_CPU_Read_1"));
-				createAIOWorkload(_aioWorkload, item->path, true, Access_CPU_Read, offsets, item->size, iterations);
+				createAIOWorkload(&_compute->aioWorkload, item->path, true, Access_CPU_Read, offsets, item->size, iterations);
 
 				VkBuffer buffer[2];
 				createBuffer(_device, _compute, item->size, Access_GPU_Write, &buffer[0], &offsets[0],
@@ -869,9 +901,8 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 								buildName(debugName, item->name, "_GPU_Write_1"));
 			
 				float color[4] = { 0.4f, 0.4f, 1.0f, 1.0f };
-				createTransferCommand(_compute, _transferCmdBuffers[0], buffer[1], sbuffer[1], item->size, item->name, color);
-				createTransferCommand(_compute, _transferCmdBuffers[1], buffer[0], sbuffer[0], item->size, item->name, color);
-
+				createTransferCommand(_compute->transferCmdBuffers[0], buffer[1], sbuffer[1], item->size, item->name, color);
+				createTransferCommand(_compute->transferCmdBuffers[1], buffer[0], sbuffer[0], item->size, item->name, color);
 				
 				bufferInfos[0][i].buffer = buffer[0]; bufferInfos[1][i].buffer = buffer[1];
 				bufferInfos[0][i].offset = bufferInfos[1][i].offset = 0;
@@ -896,16 +927,16 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 
 	if(DEBUG_MARKERS)
 	{
-		vkCmdEndDebugUtilsLabel(_transferCmdBuffers[0]);
-		vkCmdEndDebugUtilsLabel(_transferCmdBuffers[1]);
-		vkCmdEndDebugUtilsLabel(_transferUniqueCmdBuffers[0]);
-		vkCmdEndDebugUtilsLabel(_transferUniqueCmdBuffers[1]);
+		vkCmdEndDebugUtilsLabel(_compute->transferCmdBuffers[0]);
+		vkCmdEndDebugUtilsLabel(_compute->transferCmdBuffers[1]);
+		vkCmdEndDebugUtilsLabel(_compute->transferUniqueCmdBuffers[0]);
+		vkCmdEndDebugUtilsLabel(_compute->transferUniqueCmdBuffers[1]);
 	}
 
-	vkEndCommandBuffer(_transferCmdBuffers[0]);
-	vkEndCommandBuffer(_transferCmdBuffers[1]);
-	vkEndCommandBuffer(_transferUniqueCmdBuffers[0]);
-	vkEndCommandBuffer(_transferUniqueCmdBuffers[1]);
+	vkEndCommandBuffer(_compute->transferCmdBuffers[0]);
+	vkEndCommandBuffer(_compute->transferCmdBuffers[1]);
+	vkEndCommandBuffer(_compute->transferUniqueCmdBuffers[0]);
+	vkEndCommandBuffer(_compute->transferUniqueCmdBuffers[1]);
 
 	VkDescriptorSetLayout descriptorLayout;
 	createDescriptorLayout(_device, _compute, descriptorBindings, count, &descriptorLayout);
@@ -936,15 +967,16 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	//beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	beginInfo.pInheritanceInfo = 0; // Optional
-	vkBeginCommandBuffer(_graphicsCmdBuffers[0], &beginInfo);
-	vkBeginCommandBuffer(_graphicsCmdBuffers[1], &beginInfo);
+	
+	vkBeginCommandBuffer(_compute->graphicsCmdBuffers[0], &beginInfo);
+	vkBeginCommandBuffer(_compute->graphicsCmdBuffers[1], &beginInfo);
 
 	if(DEBUG_MARKERS)
 	{
 		VkDebugUtilsLabelEXT labelInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
 			0, "Graphics Cmds", { 0.4f, 1.0f, 0.4f, 1.0f }};
-		vkCmdBeginDebugUtilsLabel(_graphicsCmdBuffers[0], &labelInfo);
-		vkCmdBeginDebugUtilsLabel(_graphicsCmdBuffers[1], &labelInfo);
+		vkCmdBeginDebugUtilsLabel(_compute->graphicsCmdBuffers[0], &labelInfo);
+		vkCmdBeginDebugUtilsLabel(_compute->graphicsCmdBuffers[1], &labelInfo);
 	}
 
 	count = _desc->programCount;
@@ -958,29 +990,29 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 		VkPipeline pipeline;
 		createComputePipeline(_device, _compute, &module, &pipelineLayout, &pipeline);
 
-		vkCmdBindPipeline(_graphicsCmdBuffers[0], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-		vkCmdBindPipeline(_graphicsCmdBuffers[1], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+		vkCmdBindPipeline(_compute->graphicsCmdBuffers[0], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+		vkCmdBindPipeline(_compute->graphicsCmdBuffers[1], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 
-		vkCmdBindDescriptorSets(_graphicsCmdBuffers[0], VK_PIPELINE_BIND_POINT_COMPUTE, 
+		vkCmdBindDescriptorSets(_compute->graphicsCmdBuffers[0], VK_PIPELINE_BIND_POINT_COMPUTE, 
 			pipelineLayout, 0, 1, &_compute->computeDescriptors[0], 0, 0);
-		vkCmdBindDescriptorSets(_graphicsCmdBuffers[1], VK_PIPELINE_BIND_POINT_COMPUTE, 
+		vkCmdBindDescriptorSets(_compute->graphicsCmdBuffers[1], VK_PIPELINE_BIND_POINT_COMPUTE, 
 			pipelineLayout, 0, 1, &_compute->computeDescriptors[1], 0, 0);
 
 		if(DEBUG_MARKERS)
 		{
 			VkDebugUtilsLabelEXT labelInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
 				0, item->name, { 1.0f, 1.0f, 0.4f, 1.0f }};
-			vkCmdBeginDebugUtilsLabel(_graphicsCmdBuffers[0], &labelInfo);
-			vkCmdBeginDebugUtilsLabel(_graphicsCmdBuffers[1], &labelInfo);
+			vkCmdBeginDebugUtilsLabel(_compute->graphicsCmdBuffers[0], &labelInfo);
+			vkCmdBeginDebugUtilsLabel(_compute->graphicsCmdBuffers[1], &labelInfo);
 		}
 
-		vkCmdDispatch(_graphicsCmdBuffers[0], item->dispatch[0], item->dispatch[1], item->dispatch[2]);
-		vkCmdDispatch(_graphicsCmdBuffers[1], item->dispatch[0], item->dispatch[1], item->dispatch[2]);
+		vkCmdDispatch(_compute->graphicsCmdBuffers[0], item->dispatch[0], item->dispatch[1], item->dispatch[2]);
+		vkCmdDispatch(_compute->graphicsCmdBuffers[1], item->dispatch[0], item->dispatch[1], item->dispatch[2]);
 
 		if(DEBUG_MARKERS)
 		{
-			vkCmdEndDebugUtilsLabel(_graphicsCmdBuffers[0]);
-			vkCmdEndDebugUtilsLabel(_graphicsCmdBuffers[1]);
+			vkCmdEndDebugUtilsLabel(_compute->graphicsCmdBuffers[0]);
+			vkCmdEndDebugUtilsLabel(_compute->graphicsCmdBuffers[1]);
 		}
 
 		VkMemoryBarrier barrier;
@@ -993,35 +1025,35 @@ int computeCompileWorkflow(Device *_device, Compute *_compute, const Description
 		{
 			VkDebugUtilsLabelEXT labelInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, 
 				0, "Memory Barrier", { 1.0f, 0.0f, 0.0f, 1.0f }};
-			vkCmdBeginDebugUtilsLabel(_graphicsCmdBuffers[0], &labelInfo);
-			vkCmdBeginDebugUtilsLabel(_graphicsCmdBuffers[1], &labelInfo);
+			vkCmdBeginDebugUtilsLabel(_compute->graphicsCmdBuffers[0], &labelInfo);
+			vkCmdBeginDebugUtilsLabel(_compute->graphicsCmdBuffers[1], &labelInfo);
 		}
 
 
-		vkCmdPipelineBarrier(_graphicsCmdBuffers[0], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
+		vkCmdPipelineBarrier(_compute->graphicsCmdBuffers[0], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, 0, 0, 0);
-		vkCmdPipelineBarrier(_graphicsCmdBuffers[1], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
+		vkCmdPipelineBarrier(_compute->graphicsCmdBuffers[1], VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, 0, 0, 0);
 
 		if(DEBUG_MARKERS)
 		{
-			vkCmdEndDebugUtilsLabel(_graphicsCmdBuffers[0]);
-			vkCmdEndDebugUtilsLabel(_graphicsCmdBuffers[1]);
+			vkCmdEndDebugUtilsLabel(_compute->graphicsCmdBuffers[0]);
+			vkCmdEndDebugUtilsLabel(_compute->graphicsCmdBuffers[1]);
 		}
 
 	}
 
 	if(DEBUG_MARKERS)
 	{
-		vkCmdEndDebugUtilsLabel(_graphicsCmdBuffers[0]);
-		vkCmdEndDebugUtilsLabel(_graphicsCmdBuffers[1]);
+		vkCmdEndDebugUtilsLabel(_compute->graphicsCmdBuffers[0]);
+		vkCmdEndDebugUtilsLabel(_compute->graphicsCmdBuffers[1]);
 	}
 
-	vkEndCommandBuffer(_graphicsCmdBuffers[0]);
-	vkEndCommandBuffer(_graphicsCmdBuffers[1]);
+	vkEndCommandBuffer(_compute->graphicsCmdBuffers[0]);
+	vkEndCommandBuffer(_compute->graphicsCmdBuffers[1]);
 
 	// Update iterations according to AIO workload count
-	for(const AIOWorkload &workload : *_aioWorkload)
+	for(const AIOWorkload &workload : _compute->aioWorkload)
 	{
 		int filecount = (int) workload.files.size();
 		iterations = (filecount < iterations) ? filecount : iterations;
@@ -1050,14 +1082,7 @@ int main(int argc, char *argv[])
 
 	if(desc != 0)
 	{
-		VkCommandBuffer graphicsCmdBuffers[2];
-		VkCommandBuffer transferCmdBuffers[2];
-		VkCommandBuffer transferUniqueCmdBuffers[2];
-		VkCommandBuffer computeCmdBuffers[2];
-		std::vector<AIOWorkload> aioWorkload;
-		std::vector<AIOWorkload> aioUniqueWorkload;
-		int count = computeCompileWorkflow(&device, &compute, desc, graphicsCmdBuffers, transferCmdBuffers,
-				transferUniqueCmdBuffers, computeCmdBuffers, &aioWorkload, &aioUniqueWorkload);
+		int count = computeCompileWorkflow(&device, &compute, desc);
 
 		VkSubmitInfo graphicsSubmit;
 		memset(&graphicsSubmit, 0, sizeof(VkSubmitInfo));
@@ -1099,47 +1124,47 @@ int main(int argc, char *argv[])
 
 			if(i == -2)
 			{
-				createAIOCommands(&compute, aioCmdBuffers[lsb], &aioUniqueWorkload, Access_CPU_Write, 0);
+				createAIOCommands(&compute, aioCmdBuffers[lsb], &compute.aioUniqueWorkload, Access_CPU_Write, 0);
 			}
 			
 			if(i >= -2 && i < count)
 			{
-				createAIOCommands(&compute, aioCmdBuffers[lsb], &aioWorkload, Access_CPU_Write, index);
+				createAIOCommands(&compute, aioCmdBuffers[lsb], &compute.aioWorkload, Access_CPU_Write, index);
 			}
 			
 			if(i == count + 1)
 			{
-				createAIOCommands(&compute, aioCmdBuffers[lsb], &aioUniqueWorkload, Access_CPU_Read, 0);
+				createAIOCommands(&compute, aioCmdBuffers[lsb], &compute.aioUniqueWorkload, Access_CPU_Read, 0);
 			}
 
 			if(i >= 2 && i < count + 2)
 			{
-				createAIOCommands(&compute, aioCmdBuffers[lsb], &aioWorkload, Access_CPU_Read, index - 4);
+				createAIOCommands(&compute, aioCmdBuffers[lsb], &compute.aioWorkload, Access_CPU_Read, index - 4);
 			}
 			
 			aioEndCmdBuffer(aioCmdBuffers[lsb]);
 
 			if(i == -1)
 			{
-				transferCB[transferSubmit.commandBufferCount] = transferUniqueCmdBuffers[0];
+				transferCB[transferSubmit.commandBufferCount] = compute.transferUniqueCmdBuffers[0];
 				++transferSubmit.commandBufferCount;
 			}
 
 			if(i == count)
 			{
-				transferCB[transferSubmit.commandBufferCount] = transferUniqueCmdBuffers[1];
+				transferCB[transferSubmit.commandBufferCount] = compute.transferUniqueCmdBuffers[1];
 				++transferSubmit.commandBufferCount;
 			}
 
 			if(i >= -1 && i < count + 1)
 			{
-				transferCB[transferSubmit.commandBufferCount] = transferCmdBuffers[lsb];
+				transferCB[transferSubmit.commandBufferCount] = compute.transferCmdBuffers[lsb];
 				++transferSubmit.commandBufferCount;
 			}
 
 			if(i >= 0 && i < count)
 			{
-				graphicsCB[graphicsSubmit.commandBufferCount] = graphicsCmdBuffers[lsb];
+				graphicsCB[graphicsSubmit.commandBufferCount] = compute.graphicsCmdBuffers[lsb];
 				++graphicsSubmit.commandBufferCount;
 			}
 
