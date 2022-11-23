@@ -1,0 +1,48 @@
+{
+	"author": "tspoon",
+	"info": "test convolutions",
+	"param" : {
+		"iterations": 1
+	},
+	"data": [
+		{
+			"source": "file",
+			"name": "weights1",
+			"type": "buffer",
+			"path": "data/conv/weights.dat",
+			"access": "read",
+			"size": 64
+		},
+		{
+			"source": "memory",
+			"name": "tmp1",
+			"type": "buffer",
+			"size": 1032
+		},
+		{
+			"source": "memory",
+			"name": "tmp2",
+			"type": "buffer",			
+			"size": 1032
+		},
+		{
+			"source": "memory",
+			"name": "ones",
+			"type": "buffer",			
+			"size": 1032
+		}
+	],
+	"program": [
+		{
+			"name": "fillones",
+			"path": "data/ones.spv",
+			"dispatch": [4, 1, 1]
+		},
+		{
+			"name": "conv1d",
+			"path": "data/conv1.spv",
+			"dispatch": [4, 1, 1]
+		}
+	]
+}
+

@@ -1,0 +1,107 @@
+#version 450
+// glslangValidator conv123.comp -V -q -e main -o conv123.spv -DCONV1D
+
+layout(binding = 0) readonly buffer file1 { float v[]; } weights1;
+layout(binding = 1) buffer memory1 { float v[]; } tmp1;
+layout(binding = 2) buffer memory2 { float v[]; } tmp2;
+layout(binding = 3) buffer memory3 { float v[]; } tmp1_x2;
+layout(binding = 4) buffer memory4 { float v[]; } tmp2_x2;
+layout(binding = 5) buffer dir1 { float v[]; } input1;
+//layout(binding = 5) readonly buffer dir1 { float v[]; } input1;
+
+float relu(in float _x) { return max(0, _x); }
+
+#ifdef ONES
+layout (local_size_x = 64) in;
+void main()
+{
+	uint gID = gl_GlobalInvocationID.x;
+	if(gID == 0) input1.v[gID] = 0.0;
+	if(gID == 256) input1.v[gID+2] = 0.0;
+	input1.v[gID+1] = 1.0;
+}
+#endif
+
+#ifdef CONV1D
+layout (local_size_x = 64) in;
+void main() 
+{		
+	uvec3 fshape = uvec3(3, 1, 4); // (filter_width; in_channels, out_channels)
+	uvec2 ishape = uvec2(0, 1); // (in_width, in_channels)
+
+	uvec3 gID = gl_GlobalInvocationID;
+	for(uint o = 0; o < fshape.z; ++o)
+	{
+		float value = 0.0;
+		for(uint w = 0; w < fshape.x; ++w)
+		{
+			for(uint i = 0; i < fshape.y; ++i)
+			{
+				value += weights1.v[w*fshape.z*fshape.y + i*fshape.z + o] * input1.v[(gID.x+w)*ishape.y + i];
+			}
+		}
+
+		float bias = weights1.v[fshape.x*fshape.y*fshape.z + o];
+		tmp1.v[(gID.x+1)*fshape.z + o] = relu(value + bias);
+	}
+}
+#endif
+
+#ifdef CONV2D
+layout (local_size_x = 8, local_size_y = 8) in;
+void main() 
+{
+	uvec4 fshape = uvec4(3, 3, 3, 12); // (filter_height, filter_width, in_channels, out_channels)
+	uvec3 ishape = uvec3(0, 256+2, 3); // (in_height, in_width, in_channels)
+
+	uvec3 gID = gl_GlobalInvocationID;
+	for(uint o = 0; o < fshape.w; ++o)
+	{
+		float value = 0.0;
+		for(uint h = 0; h < fshape.x; ++h)
+		{
+			for(uint w = 0; w < fshape.y; ++w)
+			{
+				for(uint i = 0; i < fshape.z; ++i)
+				{
+					value += weights1.v[h*fshape.y*fshape.z*fshape.w + w*fshape.z*fshape.w + i*fshape.w + o] * input1.v[(gID.y+h)*ishape.y*ishape.z + (gID.x+w)*ishape.z + i];
+				}
+			}
+		}
+
+		float bias = weights1.v[fshape.x*fshape.y*fshape.z*fshape.w + o];
+		tmp1.v[(gID.y+1)*ishape.y*fshape.w + (gID.x+1)*fshape.w + o] = relu(value + bias);
+	}
+}
+#endif
+
+#ifdef SHUFFLE2D
+layout (local_size_x = 8, local_size_y = 8) in;
+void main() 
+{
+	uint scale = 2;
+	uvec3 ishape = uvec3(0, 256+2, 12);	// (in_height, in_width, in_channels)
+	uvec3 oshape = uvec3(0, (ishape.y-2)*scale+2, ishape.z/(scale*scale)); // (out_height, out_width, out_channels)
+	
+	uvec3 gID = gl_GlobalInvocationID;
+	for(uint o = 0; o < oshape.z; ++o)
+	{
+		for(uint h = 0; h < scale; ++h)
+		{
+			for(uint w = 0; w < scale; ++w)
+			{
+				tmp1_x2.v[(gID.y+h+1)*oshape.y*oshape.z + (gID.x+w+1)*oshape.z + o] = tmp2.v[(gID.y+1)*ishape.y*ishape.z + (gID.x+1)*ishape.z + o*scale*scale + h*scale + w];
+			}
+		}
+	}
+}
+#endif
+
+#ifdef CONV3D
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+void main() 
+{
+
+}
+#endif
+
