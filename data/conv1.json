@@ -9,37 +9,47 @@
 			"source": "file",
 			"name": "weights1",
 			"type": "buffer",
-			"path": "data/conv/weights.dat",
+			"path": "data/conv1/weights.dat",
 			"access": "read",
 			"size": 64
+		},
+		{
+			"source": "directory",
+			"name": "input1",
+			"type": "buffer",
+			"path": "data/conv1/input",
+			"access": "read",
+			"size": 1032
+		},
+		{
+			"source": "directory",
+			"name": "output1",
+			"type": "buffer",
+			"path": "data/conv1/output",
+			"access": "write",
+			"size": 4128
 		},
 		{
 			"source": "memory",
 			"name": "tmp1",
 			"type": "buffer",
-			"size": 1032
+			"size": 4128
 		},
 		{
 			"source": "memory",
 			"name": "tmp2",
 			"type": "buffer",			
-			"size": 1032
-		},
-		{
-			"source": "memory",
-			"name": "ones",
-			"type": "buffer",			
-			"size": 1032
+			"size": 4128
 		}
 	],
 	"program": [
 		{
-			"name": "fillones",
-			"path": "data/ones.spv",
+			"name": "zeros",
+			"path": "data/zeros1.spv",
 			"dispatch": [4, 1, 1]
 		},
 		{
-			"name": "conv1d",
+			"name": "conv",
 			"path": "data/conv1.spv",
 			"dispatch": [4, 1, 1]
 		}
