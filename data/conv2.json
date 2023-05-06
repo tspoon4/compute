@@ -9,67 +9,67 @@
 			"source": "file",
 			"name": "weights1",
 			"type": "buffer",
-			"path": "data/conv1/weights.dat",
+			"path": "data/conv2/weights.dat",
 			"access": "read",
-			"size": 64
+			"size": 1344
 		},
 		{
 			"source": "directory",
 			"name": "input1",
 			"type": "buffer",
-			"path": "data/conv1/input",
+			"path": "data/conv2/input",
 			"access": "read",
-			"size": 1024
+			"size": 786432
 		},
 		{
 			"source": "directory",
 			"name": "output1",
 			"type": "buffer",
-			"path": "data/conv1/output",
+			"path": "data/conv2/output",
 			"access": "write",
-			"size": 4096
+			"size": 3145728
 		},
 		{
 			"source": "memory",
 			"name": "input2",
 			"type": "buffer",
-			"size": 1536
+			"size": 887808
 		},
 		{
 			"source": "memory",
 			"name": "output2",
 			"type": "buffer",
-			"size": 6144
+			"size": 3551232
 		},
 
 		{
 			"source": "memory",
 			"name": "tmp1",
 			"type": "buffer",
-			"size": 6144
+			"size": 3551232
 		},
 		{
 			"source": "memory",
 			"name": "tmp2",
 			"type": "buffer",			
-			"size": 6144
+			"size": 3551232
 		}
 	],
 	"program": [
 		{
-			"name": "pad1",
-			"path": "data/pad1.spv",
-			"dispatch": [6, 1, 1]
+			"name": "pad2",
+			"path": "data/pad2.spv",
+			"dispatch": [34, 34, 1]
 		},
 		{
 			"name": "conv",
-			"path": "data/conv1.spv",
-			"dispatch": [4, 1, 1]
+			"path": "data/conv2.spv",
+			"dispatch": [32, 32, 1]
 		},
 		{
-			"name": "unpad1",
-			"path": "data/unpad1.spv",
-			"dispatch": [4, 1, 1]
+			"name": "unpad2",
+			"path": "data/unpad2.spv",
+			"dispatch": [32, 32, 1]
 		}
 	]
 }

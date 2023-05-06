@@ -1079,7 +1079,8 @@ int computeExecuteWorkflow()
 
 	//const Description *desc = descCreateFromFile("data/sha256.json");
 	//const Description *desc = descCreateFromFile("data/test.json");
-	const Description *desc = descCreateFromFile("data/conv1.json");
+	//const Description *desc = descCreateFromFile("data/conv1.json");
+	const Description *desc = descCreateFromFile("data/conv2.json");
 
 	if(desc != 0)
 	{
