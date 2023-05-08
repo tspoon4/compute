@@ -174,8 +174,8 @@ void main()
 		{\
 			for(uint w = 0; w < scale; ++w)\
 			{\
-				uint iindex = (gID.y+1)*ishape.y*ishape.z + (gID.x+1)*ishape.z + o*scale*scale + h*scale + w;\
-				uint oindex = (gID.y+h+1)*oshape.y*oshape.z + (gID.x+w+1)*oshape.z + o;\
+				uint iindex = (gID.y + DIM2D)*(ishape.y + 2*DIM2D)*ishape.z + (gID.x + DIM2D)*ishape.z + o*scale*scale + h*scale + w;\
+				uint oindex = (gID.y + DIM2D + h)*(oshape.y + 2*DIM2D)*oshape.z + (gID.x + DIM2D + w)*oshape.z + o;\
 				output[oindex] = input[iindex];\
 			}\
 		}\
@@ -210,8 +210,8 @@ layout (local_size_x = DIM2D, local_size_y = DIM2D) in;
 void main() 
 {
 	uint scale = 2;
-	uvec3 ishape = uvec3(0, 256+2, 12);	// (in_height, in_width, in_channels)
-	uvec3 oshape = uvec3(0, (ishape.y-2)*scale+2, ishape.z/(scale*scale)); // (out_height, out_width, out_channels)
+	uvec3 ishape = uvec3(0, 256, 12);	// (in_height, in_width, in_channels)
+	uvec3 oshape = uvec3(0, ishape.y*scale, ishape.z/(scale*scale)); // (out_height, out_width, out_channels)
 
 	shuffle2d(tmp2.v, ishape, scale, tmp1_x2.v, oshape);	
 }
@@ -227,11 +227,66 @@ void main()
 
 //---------------------------------- 3D --------------------------------------
 
+
+#define clear3d(value, shape, output) {\
+	uvec3 gID = gl_GlobalInvocationID;\
+	uint oindex = gID.z*(shape.y + 2*DIM3D)*(shape.z + 2*DIM3D)*shape.w + gID.y*(shape.z + 2*DIM3D)*shape.w + gID.x*shape.w;\
+	for(uint i = 0; i < shape.w; ++i) output[oindex+i] = value;\
+}
+
+
+#define pad3d(value, input, shape, output) {\
+	uvec3 gID = gl_GlobalInvocationID;\
+	if(gl_WorkGroupID.x == 0 || gl_WorkGroupID.x == gl_NumWorkGroups.x-1 || gl_WorkGroupID.y == 0 || gl_WorkGroupID.y == gl_NumWorkGroups.y-1 || gl_WorkGroupID.z == 0 || gl_WorkGroupID.z == gl_NumWorkGroups.z-1)\
+	{\
+		uint oindex = gID.z*(shape.y + 2*DIM3D)*(shape.z + 2*DIM3D)*shape.w + gID.y*(shape.z + 2*DIM3D)*shape.w + gID.x*shape.w;\
+		for(uint i = 0; i < shape.w; ++i) output[oindex+i] = value;\
+	}\
+	else\
+	{\
+		uint iindex = (gID.z - DIM3D)*shape.y*shape.z*shape.w + (gID.y - DIM3D)*shape.z*shape.w + (gID.x - DIM3D)*shape.w;\
+		uint oindex = gID.z*(shape.y + 2*DIM3D)*(shape.z + 2*DIM3D)*shape.w + gID.y*(shape.z + 2*DIM3D)*shape.w + gID.x*shape.w;\
+		for(uint i = 0; i < shape.w; ++i) output[oindex+i] = input[iindex+i];\
+	}\
+}
+
+
+#define unpad3d(input, shape, output) {\
+	uvec3 gID = gl_GlobalInvocationID;\
+	uint iindex = (gID.z + DIM3D)*(shape.y + 2*DIM3D)*(shape.z + 2*DIM3D)*shape.w + (gID.y + DIM3D)*(shape.z + 2*DIM3D)*shape.w + (gID.x + DIM3D)*shape.w;\
+	uint oindex = gID.z*shape.y*shape.z*shape.w + gID.y*shape.z+shape.w + gID.x*shape.w;\
+	for(uint i = 0; i < shape.w; ++i) output[oindex+i] = input[iindex+i];\
+}
+
+
+#define conv3d(T, input, ishape, filters, fshape, activ, output) {\
+}
+
+
+#ifdef PAD3D
+layout (local_size_x = DIM3D, local_size_y = DIM3D, local_size_z = DIM3D) in;
+void main() 
+{
+	clear3d(0.0, uvec4(0, 32, 32, 12), tmp1.v);
+	clear3d(0.0, uvec4(0, 32, 32, 12), tmp2.v);
+	clear3d(0.0, uvec4(0, 32, 32, 12), output2.v);
+	pad3d(0.0, input1.v, uvec4(0, 32, 32, 3), input2.v);
+}
+#endif
+
 #ifdef CONV3D
 layout (local_size_x = DIM3D, local_size_y = DIM3D, local_size_z = DIM3D) in;
 void main() 
 {
 
+}
+#endif
+
+#ifdef UNPAD3D
+layout (local_size_x = DIM3D, local_size_y = DIM3D, local_size_z = DIM3D) in;
+void main() 
+{	
+	unpad3d(output2.v, uvec4(0, 32, 32, 12), output1.v);
 }
 #endif
 
