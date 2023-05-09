@@ -6,19 +6,41 @@
 #define DIM3D 4
 
 layout(binding = 0) readonly buffer file1 { float v[]; } weights1;
+layout(binding = 0) readonly buffer file1_3 { vec3 v[]; } weights1_3;
+
 layout(binding = 1) readonly buffer dir1 { float v[]; } input1;
+layout(binding = 1) readonly buffer dir1_3 { vec3 v[]; } input1_3;
+
 layout(binding = 2) buffer dir2 { float v[]; } output1;
+layout(binding = 2) buffer dir2_3 { vec3 v[]; } output1_3;
 
 layout(binding = 3) buffer pad1 { float v[]; } input2;
+layout(binding = 3) buffer pad1_3 { vec3 v[]; } input2_3;
+
 layout(binding = 4) buffer pad2 { float v[]; } output2;
+layout(binding = 4) buffer pad2_3 { vec3 v[]; } output2_3;
 
 layout(binding = 5) buffer memory1 { float v[]; } tmp1;
+layout(binding = 5) buffer memory1_3 { vec3 v[]; } tmp1_3;
+
 layout(binding = 6) buffer memory2 { float v[]; } tmp2;
+layout(binding = 6) buffer memory2_3 { vec3 v[]; } tmp2_3;
+
 layout(binding = 7) buffer memory3 { float v[]; } tmp1_x2;
+layout(binding = 7) buffer memory3_3 { vec3 v[]; } tmp1_x2_3;
+
 layout(binding = 8) buffer memory4 { float v[]; } tmp2_x2;
+layout(binding = 8) buffer memory4_3 { vec3 v[]; } tmp2_x2_3;
 
 float none(in float _x) { return _x; }
+vec2 none2(in vec2 _x) { return _x; }
+vec3 none3(in vec3 _x) { return _x; }
+vec4 none4(in vec4 _x) { return _x; }
+
 float relu(in float _x) { return max(0.0, _x); }
+vec2 relu2(in vec2 _x) { return max(vec2(0.0), _x); }
+vec3 relu3(in vec3 _x) { return max(vec3(0.0), _x); }
+vec4 relu4(in vec4 _x) { return max(vec4(0.0), _x); }
 
 
 //---------------------------------- 1D --------------------------------------
@@ -146,7 +168,7 @@ void main()
 	uvec2 offset = DIM2D - ((fshape.yx-1)>>1);\
 	for(uint o = 0; o < fshape.w; ++o)\
 	{\
-		T value = 0.0;\
+		T value = T(0.0);\
 		for(uint h = 0; h < fshape.x; ++h)\
 		{\
 			for(uint w = 0; w < fshape.y; ++w)\
@@ -187,10 +209,17 @@ void main()
 layout (local_size_x = DIM2D, local_size_y = DIM2D) in;
 void main() 
 {
+	// float version
 	clear2d(0.0, uvec3(0, 256, 12), tmp1.v);
 	clear2d(0.0, uvec3(0, 256, 12), tmp2.v);
 	clear2d(0.0, uvec3(0, 256, 12), output2.v);
 	pad2d(0.0, input1.v, uvec3(0, 256, 3), input2.v);
+
+	// vec3 version
+	//clear2d(vec3(0.0), uvec3(0, 256, 4), tmp1_3.v);
+	//clear2d(vec3(0.0), uvec3(0, 256, 4), tmp2_3.v);
+	//clear2d(vec3(0.0), uvec3(0, 256, 4), output2_3.v);
+	//pad2d(vec3(0.0), input1_3.v, uvec3(0, 256, 1), input2_3.v);
 }
 #endif
 
@@ -198,10 +227,15 @@ void main()
 layout (local_size_x = DIM2D, local_size_y = DIM2D) in;
 void main() 
 {
+	// float version
 	uvec4 fshape = uvec4(3, 3, 3, 12); // (filter_height, filter_width, in_channels, out_channels)
 	uvec3 ishape = uvec3(0, 256, 3); // (in_height, in_width, in_channels)
-
 	conv2d(float, input2.v, ishape, weights1.v, fshape, relu, output2.v);
+
+	// vec3 version
+	//uvec4 fshape = uvec4(3, 3, 1, 4); // (filter_height, filter_width, in_channels, out_channels)
+	//uvec3 ishape = uvec3(0, 256, 1); // (in_height, in_width, in_channels)
+	//conv2d(vec3, input2_3.v, ishape, weights1_3.v, fshape, relu3, output2_3.v);
 }
 #endif
 
@@ -220,8 +254,12 @@ void main()
 #ifdef UNPAD2D
 layout (local_size_x = DIM2D, local_size_y = DIM2D) in;
 void main() 
-{	
+{
+	// float version	
 	unpad2d(output2.v, uvec3(0, 256, 12), output1.v);	
+
+	// vec3 version
+	//unpad2d(output2_3.v, uvec3(0, 256, 4), output1_3.v);	
 }
 #endif
 
