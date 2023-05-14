@@ -76,6 +76,7 @@ vec4 relu4(in vec4 _x) { return max(vec4(0.0), _x); }
 #define conv1d(T, input, ishape, filters, fshape, activ, output) {\
 	uvec3 gID = gl_GlobalInvocationID;\
 	uint offset = DIM1D - ((fshape.x-1)>>1);\
+	uint dim = fshape.y / ishape.y;\
 	for(uint o = 0; o < fshape.z; ++o)\
 	{\
 		T value = T(0.0);\
@@ -83,7 +84,7 @@ vec4 relu4(in vec4 _x) { return max(vec4(0.0), _x); }
 		{\
 			for(uint i = 0; i < fshape.y; ++i)\
 			{\
-					uint iindex = (gID.x+offset+w)*ishape.y + i;\
+					uint iindex = (gID.x+offset+w)*ishape.y + i/dim;\
 					uint windex = w*fshape.z*fshape.y + i*fshape.z + o;\
 					value += filters[windex] * input[iindex];\
 			}\
@@ -99,9 +100,17 @@ vec4 relu4(in vec4 _x) { return max(vec4(0.0), _x); }
 layout (local_size_x = DIM1D) in;
 void main() 
 {
-	clear1d(0.0, uvec2(0, 4), tmp1.v);
-	clear1d(0.0, uvec2(0, 4), tmp2.v);
-	pad1d(0.0, input1.v, uvec2(0, 1), input2.v);
+	// float version
+	/*
+	clear1d(0.0, uvec2(0, 12), tmp1.v);
+	clear1d(0.0, uvec2(0, 12), tmp2.v);
+	pad1d(0.0, input1.v, uvec2(0, 4), input2.v);
+	*/
+
+	// vec4 version
+	clear1d(vec4(0.0), uvec2(0, 3), tmp1_4.v);
+	clear1d(vec4(0.0), uvec2(0, 3), tmp2_4.v);
+	pad1d(vec4(0.0), input1_4.v, uvec2(0, 1), input2_4.v);
 }
 #endif
 
@@ -109,18 +118,29 @@ void main()
 layout (local_size_x = DIM1D) in;
 void main() 
 {		
-	uvec3 fshape = uvec3(3, 1, 4); // (filter_width; in_channels, out_channels)
-	uvec2 ishape = uvec2(0, 1); // (in_width, in_channels)
-
+	// float version
+	/*
+	uvec3 fshape = uvec3(3, 4, 12); // (filter_width; in_channels, out_channels)
+	uvec2 ishape = uvec2(0, 4); // (in_width, in_channels)
 	conv1d(float, input2.v, ishape, weights1.v, fshape, relu, output2.v);
+	*/
+
+	// vec4 version
+	uvec3 fshape = uvec3(3, 4, 3); // (filter_width; in_channels, out_channels)
+	uvec2 ishape = uvec2(0, 1); // (in_width, in_channels)
+	conv1d(vec4, input2_4.v, ishape, weights1_4.v, fshape, relu4, output2_4.v);
 }
 #endif
 
 #ifdef UNPAD1D
 layout (local_size_x = DIM1D) in;
-void main() 
-{	
-	unpad1d(output2.v, uvec2(0, 4), output1.v);	
+void main()
+{
+	// float version
+	//unpad1d(output2.v, uvec2(0, 12), output1.v);
+
+	// vec4 version
+	unpad1d(output2_4.v, uvec2(0, 3), output1_4.v);
 }
 #endif
 

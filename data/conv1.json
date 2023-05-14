@@ -11,7 +11,7 @@
 			"type": "buffer",
 			"path": "data/conv1/weights.dat",
 			"access": "read",
-			"size": 64
+			"size": 624
 		},
 		{
 			"source": "directory",
@@ -19,7 +19,7 @@
 			"type": "buffer",
 			"path": "data/conv1/input",
 			"access": "read",
-			"size": 1024
+			"size": 4096
 		},
 		{
 			"source": "directory",
@@ -27,32 +27,32 @@
 			"type": "buffer",
 			"path": "data/conv1/output",
 			"access": "write",
-			"size": 4096
+			"size": 12288
 		},
 		{
 			"source": "memory",
 			"name": "input2",
 			"type": "buffer",
-			"size": 1536
+			"size": 6144
 		},
 		{
 			"source": "memory",
 			"name": "output2",
 			"type": "buffer",
-			"size": 6144
+			"size": 18432
 		},
 
 		{
 			"source": "memory",
 			"name": "tmp1",
 			"type": "buffer",
-			"size": 6144
+			"size": 18432
 		},
 		{
 			"source": "memory",
 			"name": "tmp2",
 			"type": "buffer",			
-			"size": 6144
+			"size": 18432
 		}
 	],
 	"program": [
