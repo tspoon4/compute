@@ -109,7 +109,7 @@ bool aioCmdRead(AIOCmdBuffer *_cmdBuffer, void *_buffer, const char *_file, size
 {
 	bool ret = false;
 
-	int fd = open(_file, O_NONBLOCK | O_RDONLY);
+	int fd = open(_file, O_NONBLOCK | O_RDONLY /*| O_DIRECT*/);
 	if(fd > 0)
 	{
 		io_prep_pread(_cmdBuffer->commands[_cmdBuffer->count], fd, _buffer, _size, _offset);
@@ -124,7 +124,7 @@ bool aioCmdWrite(AIOCmdBuffer *_cmdBuffer, void *_buffer, const char *_file, siz
 {
 	bool ret = false;
 
-	int fd = open(_file, O_NONBLOCK | O_WRONLY | O_CREAT | O_TRUNC /*| O_DIRECT*/, 644);
+	int fd = open(_file, O_NONBLOCK | O_WRONLY | O_CREAT | O_TRUNC /*| O_DIRECT*/, 0644);
 	if(fd > 0)
 	{
 		io_prep_pwrite(_cmdBuffer->commands[_cmdBuffer->count], fd, _buffer, _size, _offset);
@@ -163,7 +163,9 @@ bool aioWaitIdle(AIO *_aio)
 		// Close all file descriptors
 		for(int i = 0; i < _aio->pending->count; ++i)
 		{
-			close(_aio->pending->commands[i]->aio_fildes);
+			int res;
+			//res = fsync(_aio->pending->commands[i]->aio_fildes);
+			res = close(_aio->pending->commands[i]->aio_fildes);
 		}
 		
 		_aio->pending = 0;

@@ -11,7 +11,7 @@
 			"type": "buffer",
 			"path": "data/conv2/weights.dat",
 			"access": "read",
-			"size": 1344
+			"size": 1776
 		},
 		{
 			"source": "directory",
@@ -19,7 +19,7 @@
 			"type": "buffer",
 			"path": "data/conv2/input",
 			"access": "read",
-			"size": 786432
+			"size": 1048576
 		},
 		{
 			"source": "directory",
@@ -33,7 +33,7 @@
 			"source": "memory",
 			"name": "input2",
 			"type": "buffer",
-			"size": 887808
+			"size": 1183744
 		},
 		{
 			"source": "memory",
