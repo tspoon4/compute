@@ -1,6 +1,6 @@
 {
 	"author": "tspoon",
-	"info": "test convolutions",
+	"info": "test 2d convolutions",
 	"param" : {
 		"iterations": 1
 	},
@@ -41,7 +41,6 @@
 			"type": "buffer",
 			"size": 3551232
 		},
-
 		{
 			"source": "memory",
 			"name": "tmp1",
@@ -62,7 +61,7 @@
 			"dispatch": [34, 34, 1]
 		},
 		{
-			"name": "conv",
+			"name": "conv2",
 			"path": "data/conv2.spv",
 			"dispatch": [32, 32, 1]
 		},

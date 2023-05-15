@@ -1,6 +1,6 @@
 {
 	"author": "tspoon",
-	"info": "test 1d convolutions",
+	"info": "test 3d convolutions",
 	"param" : {
 		"iterations": 1
 	},
@@ -9,66 +9,66 @@
 			"source": "file",
 			"name": "weights1",
 			"type": "buffer",
-			"path": "data/conv1/weights.dat",
+			"path": "data/conv3/weights.dat",
 			"access": "read",
-			"size": 624
+			"size": 5232
 		},
 		{
 			"source": "directory",
 			"name": "input1",
 			"type": "buffer",
-			"path": "data/conv1/input",
+			"path": "data/conv3/input",
 			"access": "read",
-			"size": 4096
+			"size": 524288
 		},
 		{
 			"source": "directory",
 			"name": "output1",
 			"type": "buffer",
-			"path": "data/conv1/output",
+			"path": "data/conv3/output",
 			"access": "write",
-			"size": 12288
+			"size": 1572864
 		},
 		{
 			"source": "memory",
 			"name": "input2",
 			"type": "buffer",
-			"size": 6144
+			"size": 1024000
 		},
 		{
 			"source": "memory",
 			"name": "output2",
 			"type": "buffer",
-			"size": 18432
+			"size": 3072000
 		},
 		{
 			"source": "memory",
 			"name": "tmp1",
 			"type": "buffer",
-			"size": 18432
+			"size": 3072000
 		},
 		{
 			"source": "memory",
 			"name": "tmp2",
 			"type": "buffer",			
-			"size": 18432
+			"size": 3072000
 		}
 	],
 	"program": [
 		{
-			"name": "pad1",
-			"path": "data/pad1.spv",
-			"dispatch": [6, 1, 1]
+			"name": "pad3",
+			"path": "data/pad3.spv",
+			"dispatch": [10, 10, 10]
 		},
 		{
-			"name": "conv1",
-			"path": "data/conv1.spv",
-			"dispatch": [4, 1, 1]
+			"name": "conv3",
+			"path": "data/conv3.spv",
+			"dispatch": [8, 8, 8]
 		},
 		{
-			"name": "unpad1",
-			"path": "data/unpad1.spv",
-			"dispatch": [4, 1, 1]
+			"name": "unpad3",
+			"path": "data/unpad3.spv",
+			"dispatch": [8, 8, 8]
 		}
 	]
 }
