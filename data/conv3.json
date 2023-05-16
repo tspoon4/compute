@@ -11,7 +11,8 @@
 			"type": "buffer",
 			"path": "data/conv3/weights.dat",
 			"access": "read",
-			"size": 5232
+			"size": 5232,
+			"comment": "size breakdown: (3*3*3*4*12)*4 + (12)*4"
 		},
 		{
 			"source": "directory",
@@ -19,7 +20,8 @@
 			"type": "buffer",
 			"path": "data/conv3/input",
 			"access": "read",
-			"size": 524288
+			"size": 524288,
+			"comment": "size breakdown: (32*32*32*4)*4"
 		},
 		{
 			"source": "directory",
@@ -27,31 +29,36 @@
 			"type": "buffer",
 			"path": "data/conv3/output",
 			"access": "write",
-			"size": 1572864
+			"size": 1572864,
+			"comment": "size breakdown: (32*32*32*12)*4"
 		},
 		{
 			"source": "memory",
 			"name": "input2",
 			"type": "buffer",
-			"size": 1024000
+			"size": 1024000,
+			"comment": "size breakdown: ((32+2*4) * (32+2*4) * (32+2*4) * 4) * 4"
 		},
 		{
 			"source": "memory",
 			"name": "output2",
 			"type": "buffer",
-			"size": 3072000
+			"size": 3072000,
+			"comment": "size breakdown: ((32+2*4) * (32+2*4) * (32+2*4) * 12) * 4"
 		},
 		{
 			"source": "memory",
 			"name": "tmp1",
 			"type": "buffer",
-			"size": 3072000
+			"size": 3072000,
+			"comment": "size breakdown: ((32+2*4) * (32+2*4) * (32+2*4) * 12) * 4"
 		},
 		{
 			"source": "memory",
 			"name": "tmp2",
 			"type": "buffer",			
-			"size": 3072000
+			"size": 3072000,
+			"comment": "size breakdown: ((32+2*4) * (32+2*4) * (32+2*4) * 12) * 4"
 		}
 	],
 	"program": [

@@ -313,7 +313,7 @@ void main()
 #define unpad3d(input, shape, output) {\
 	uvec3 gID = gl_GlobalInvocationID;\
 	uint iindex = (gID.z + DIM3D)*(shape.y + 2*DIM3D)*(shape.z + 2*DIM3D)*shape.w + (gID.y + DIM3D)*(shape.z + 2*DIM3D)*shape.w + (gID.x + DIM3D)*shape.w;\
-	uint oindex = gID.z*shape.y*shape.z*shape.w + gID.y*shape.z+shape.w + gID.x*shape.w;\
+	uint oindex = gID.z*shape.y*shape.z*shape.w + gID.y*shape.z*shape.w + gID.x*shape.w;\
 	for(uint i = 0; i < shape.w; ++i) output[oindex+i] = input[iindex+i];\
 }
 
@@ -333,7 +333,7 @@ void main()
 				{\
 					for(uint i = 0; i < fshape[3]; ++i)\
 					{\
-						uint iindex = (gID.z+offset.z+d)*(ishape.y + 2*DIM3D)*(ishape.z + 2*DIM3D)*ishape.w + (gID.y+offset.y+h)*(ishape.z + 2*DIM2D)*ishape.w + (gID.x+offset.x+w)*ishape.w + i/dim;\
+						uint iindex = (gID.z+offset.z+d)*(ishape.y + 2*DIM3D)*(ishape.z + 2*DIM3D)*ishape.w + (gID.y+offset.y+h)*(ishape.z + 2*DIM3D)*ishape.w + (gID.x+offset.x+w)*ishape.w + i/dim;\
 						uint windex = d*fshape[1]*fshape[2]*fshape[3]*fshape[4] + h*fshape[2]*fshape[3]*fshape[4] + w*fshape[3]*fshape[4] + i*fshape[4] + o;\
 						value += filters[windex] * input[iindex];\
 					}\
@@ -352,18 +352,18 @@ layout (local_size_x = DIM3D, local_size_y = DIM3D, local_size_z = DIM3D) in;
 void main() 
 {
 	// float version
+	/*
 	clear3d(0.0, uvec4(0, 32, 32, 12), tmp1.v);
 	clear3d(0.0, uvec4(0, 32, 32, 12), tmp2.v);
 	clear3d(0.0, uvec4(0, 32, 32, 12), output2.v);
 	pad3d(0.0, input1.v, uvec4(0, 32, 32, 4), input2.v);
+	*/
 
 	// vec4 version
-	/*
-	clear3d(0.0, uvec4(0, 32, 32, 3), tmp1_4.v);
-	clear3d(0.0, uvec4(0, 32, 32, 3), tmp2_4.v);
-	clear3d(0.0, uvec4(0, 32, 32, 3), output2_4.v);
-	pad3d(0.0, input1_4.v, uvec4(0, 32, 32, 1), input2_4.v);
-	*/
+	clear3d(vec4(0.0), uvec4(0, 32, 32, 3), tmp1_4.v);
+	clear3d(vec4(0.0), uvec4(0, 32, 32, 3), tmp2_4.v);
+	clear3d(vec4(0.0), uvec4(0, 32, 32, 3), output2_4.v);
+	pad3d(vec4(0.0), input1_4.v, uvec4(0, 32, 32, 1), input2_4.v);
 }
 #endif
 
@@ -372,16 +372,16 @@ layout (local_size_x = DIM3D, local_size_y = DIM3D, local_size_z = DIM3D) in;
 void main() 
 {
 	// float version
+	/*
 	uint fshape[5] = {3, 3, 3, 4, 12}; // (filter_depth, filter_height, filter_width, in_channels, out_channels)
 	uvec4 ishape = uvec4(32, 32, 32, 4); // (in_depth, in_height, in_width, in_channels)
 	conv3d(float, input2.v, ishape, weights1.v, fshape, relu, output2.v);
+	*/
 
 	// vec4 version
-	/*
 	uint fshape[5] = {3, 3, 3, 4, 3}; // (filter_depth, filter_height, filter_width, in_channels, out_channels)
 	uvec4 ishape = uvec4(32, 32, 32, 1); // (in_depth, in_height, in_width, in_channels)
 	conv3d(vec4, input2_4.v, ishape, weights1_4.v, fshape, relu4, output2_4.v);
-	*/
 }
 #endif
 
@@ -390,10 +390,10 @@ layout (local_size_x = DIM3D, local_size_y = DIM3D, local_size_z = DIM3D) in;
 void main() 
 {
 	// float version
-	unpad3d(output2.v, uvec4(0, 32, 32, 12), output1.v);
+	//unpad3d(output2.v, uvec4(0, 32, 32, 12), output1.v);
 
 	// vec4 version
-	//unpad3d(output2_4.v, uvec4(0, 32, 32, 3), output1_4.v);
+	unpad3d(output2_4.v, uvec4(0, 32, 32, 3), output1_4.v);
 }
 #endif
 
