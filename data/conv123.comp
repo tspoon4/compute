@@ -214,10 +214,35 @@ void main()
 			for(uint w = 0; w < scale; ++w)\
 			{\
 				uint iindex = (gID.y + DIM2D)*(ishape.y + 2*DIM2D)*ishape.z + (gID.x + DIM2D)*ishape.z + o*scale*scale + h*scale + w;\
-				uint oindex = (gID.y + DIM2D + h)*(oshape.y + 2*DIM2D)*oshape.z + (gID.x + DIM2D + w)*oshape.z + o;\
+				uint oindex = (gID.y*scale + DIM2D + h)*(oshape.y + 2*DIM2D)*oshape.z + (gID.x*scale + DIM2D + w)*oshape.z + o;\
 				output[oindex] = input[iindex];\
 			}\
 		}\
+	}\
+}
+
+
+// Specialized vector shuffle2d: scale=2 and ishape.z%16=0
+#define shuffle2d_4(input, ishape, scale, output, oshape) {\
+	uvec3 gID = gl_GlobalInvocationID;\
+	for(uint o = 0; o < oshape.z; ++o)\
+	{\
+		vec4 tmpin;\
+		vec4 tmpout[4];\
+		uint iindex = (gID.y + DIM2D)*(ishape.y + 2*DIM2D)*ishape.z + (gID.x + DIM2D)*ishape.z +o*scale*scale;\
+		tmpin = input[iindex];\
+		tmpout[0].x = tmpin.x; tmpout[1].x = tmpin.y; tmpout[2].x = tmpin.z; tmpout[3].x = tmpin.w;\
+		tmpin = input[iindex+1];\
+		tmpout[0].y = tmpin.x; tmpout[1].y = tmpin.y; tmpout[2].y = tmpin.z; tmpout[3].y = tmpin.w;\
+		tmpin = input[iindex+2];\
+		tmpout[0].z = tmpin.x; tmpout[1].z = tmpin.y; tmpout[2].z = tmpin.z; tmpout[3].z = tmpin.w;\
+		tmpin = input[iindex+3];\
+		tmpout[0].w = tmpin.x; tmpout[1].w = tmpin.y; tmpout[2].w = tmpin.z; tmpout[3].w = tmpin.w;\
+		uint oindex = (gID.y*scale + DIM2D)*(oshape.y + 2*DIM2D)*oshape.z + (gID.x*scale + DIM2D)*oshape.z + o;\
+		output[oindex] = tmpout[0];\
+		output[oindex + oshape.z + o] = tmpout[1];\
+		output[oindex + (oshape.y + 2*DIM2D)*oshape.z] = tmpout[2];\
+		output[oindex + (oshape.y + 2*DIM2D)*oshape.z + oshape.z + o] = tmpout[3];\
 	}\
 }
 
@@ -264,11 +289,19 @@ void main()
 layout (local_size_x = DIM2D, local_size_y = DIM2D) in;
 void main() 
 {
+	// float version
 	uint scale = 2;
 	uvec3 ishape = uvec3(0, 256, 12);	// (in_height, in_width, in_channels)
 	uvec3 oshape = uvec3(0, ishape.y*scale, ishape.z/(scale*scale)); // (out_height, out_width, out_channels)
+	shuffle2d(output2.v, ishape, scale, tmp1_x2.v, oshape);
 
-	shuffle2d(tmp2.v, ishape, scale, tmp1_x2.v, oshape);	
+	// vec4 version
+	/*
+	uint scale = 2;
+	uvec3 ishape = uvec3(0, 256, 4);	// (in_height, in_width, in_channels)
+	uvec3 oshape = uvec3(0, ishape.y*scale, ishape.z/(scale*scale)); // (out_height, out_width, out_channels)
+	shuffle2d_4(output2_4.v, ishape, scale, tmp1_x2_4.v, oshape);
+	*/
 }
 #endif
 

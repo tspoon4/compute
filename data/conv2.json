@@ -52,6 +52,12 @@
 			"name": "tmp2",
 			"type": "buffer",			
 			"size": 3551232
+		},
+		{
+			"source": "memory",
+			"name": "tmp1_x2",
+			"type": "buffer",
+			"size": 3345408
 		}
 	],
 	"program": [
@@ -63,6 +69,11 @@
 		{
 			"name": "conv2",
 			"path": "data/conv2.spv",
+			"dispatch": [32, 32, 1]
+		},
+		{
+			"name": "shuffle2",
+			"path": "data/shuffle2.spv",
 			"dispatch": [32, 32, 1]
 		},
 		{
