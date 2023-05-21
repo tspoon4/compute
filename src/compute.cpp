@@ -510,7 +510,7 @@ static void createFence(Compute *_compute, Workflow *_workflow, VkFence *_fence)
 	VkFenceCreateInfo createInfo;
 	memset(&createInfo, 0, sizeof(VkFenceCreateInfo));
 	createInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	createInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+	createInfo.flags = 0; //VK_FENCE_CREATE_SIGNALED_BIT;
 	vkCreateFence(_compute->device, &createInfo, 0, _fence);
 	_workflow->fences.push_back(*_fence);
 }
@@ -1172,17 +1172,24 @@ int computeExecuteWorkflow()
 			}
 
 			// TODO check if semaphore is needed between the transfer and compute queue
-			vkWaitForFences(device.device, 1, &transferFences[lsb], VK_TRUE, UINT64_MAX);
-			vkResetFences(device.device, 1, &transferFences[lsb]);
+			if(i > -2)
+			{
+				vkWaitForFences(device.device, 1, &transferFences[lsb^1], VK_TRUE, UINT64_MAX);
+				vkResetFences(device.device, 1, &transferFences[lsb^1]);
+			}
+
+			vkQueueSubmit(device.graphicsQueue, 1, &graphicsSubmit, graphicsFences[lsb]);
 
 			aioWaitIdle(aio);
 			aioSubmitCmdBuffer(aio, aioCmdBuffers[lsb]);
 
-			vkQueueSubmit(device.transferQueue, 1, &transferSubmit, transferFences[lsb]);
+			if(i > -2)
+			{
+				vkWaitForFences(device.device, 1, &graphicsFences[lsb^1], VK_TRUE, UINT64_MAX);
+				vkResetFences(device.device, 1, &graphicsFences[lsb^1]);
+			}
 
-			vkWaitForFences(device.device, 1, &graphicsFences[lsb], VK_TRUE, UINT64_MAX);
-			vkResetFences(device.device, 1, &graphicsFences[lsb]);
-			vkQueueSubmit(device.graphicsQueue, 1, &graphicsSubmit, graphicsFences[lsb]);
+			vkQueueSubmit(device.transferQueue, 1, &transferSubmit, transferFences[lsb]);
 			
 			if(rdoc_api) rdoc_api->EndFrameCapture(NULL, NULL);
 			
