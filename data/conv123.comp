@@ -253,16 +253,16 @@ void main()
 {
 	// float version
 	/*
-	clear2d(0.0, uvec3(0, 256, 12), tmp1.v);
-	clear2d(0.0, uvec3(0, 256, 12), tmp2.v);
-	clear2d(0.0, uvec3(0, 256, 12), output2.v);
+	clear2d(0.0, uvec3(0, 256, 16), tmp1.v);
+	clear2d(0.0, uvec3(0, 256, 16), tmp2.v);
+	clear2d(0.0, uvec3(0, 256, 16), output2.v);
 	pad2d(0.0, input1.v, uvec3(0, 256, 4), input2.v);
 	*/
 
 	// vec4 version
-	clear2d(vec4(0.0), uvec3(0, 256, 3), tmp1_4.v);
-	clear2d(vec4(0.0), uvec3(0, 256, 3), tmp2_4.v);
-	clear2d(vec4(0.0), uvec3(0, 256, 3), output2_4.v);
+	clear2d(vec4(0.0), uvec3(0, 256, 4), tmp1_4.v);
+	clear2d(vec4(0.0), uvec3(0, 256, 4), tmp2_4.v);
+	clear2d(vec4(0.0), uvec3(0, 256, 4), output2_4.v);
 	pad2d(vec4(0.0), input1_4.v, uvec3(0, 256, 1), input2_4.v);
 }
 #endif
@@ -273,13 +273,13 @@ void main()
 {
 	// float version
 	/*
-	uvec4 fshape = uvec4(3, 3, 4, 12); // (filter_height, filter_width, in_channels, out_channels)
+	uvec4 fshape = uvec4(3, 3, 4, 16); // (filter_height, filter_width, in_channels, out_channels)
 	uvec3 ishape = uvec3(0, 256, 4); // (in_height, in_width, in_channels)
 	conv2d(float, input2.v, ishape, weights1.v, fshape, relu, output2.v);
 	*/
 
 	// vec4 version
-	uvec4 fshape = uvec4(3, 3, 4, 3); // (filter_height, filter_width, in_channels, out_channels)
+	uvec4 fshape = uvec4(3, 3, 4, 4); // (filter_height, filter_width, in_channels, out_channels)
 	uvec3 ishape = uvec3(0, 256, 1); // (in_height, in_width, in_channels)
 	conv2d(vec4, input2_4.v, ishape, weights1_4.v, fshape, relu4, output2_4.v);
 }
@@ -290,18 +290,18 @@ layout (local_size_x = DIM2D, local_size_y = DIM2D) in;
 void main() 
 {
 	// float version
+	/*
 	uint scale = 2;
-	uvec3 ishape = uvec3(0, 256, 12);	// (in_height, in_width, in_channels)
+	uvec3 ishape = uvec3(0, 256, 16);	// (in_height, in_width, in_channels)
 	uvec3 oshape = uvec3(0, ishape.y*scale, ishape.z/(scale*scale)); // (out_height, out_width, out_channels)
 	shuffle2d(output2.v, ishape, scale, tmp1_x2.v, oshape);
+	*/
 
 	// vec4 version
-	/*
 	uint scale = 2;
 	uvec3 ishape = uvec3(0, 256, 4);	// (in_height, in_width, in_channels)
 	uvec3 oshape = uvec3(0, ishape.y*scale, ishape.z/(scale*scale)); // (out_height, out_width, out_channels)
 	shuffle2d_4(output2_4.v, ishape, scale, tmp1_x2_4.v, oshape);
-	*/
 }
 #endif
 
@@ -310,10 +310,10 @@ layout (local_size_x = DIM2D, local_size_y = DIM2D) in;
 void main() 
 {
 	// float version
-	//unpad2d(output2.v, uvec3(0, 256, 12), output1.v);
+	//unpad2d(output2.v, uvec3(0, 256, 16), output1.v);
 
 	// vec4 version
-	unpad2d(output2_4.v, uvec3(0, 256, 3), output1_4.v);
+	unpad2d(output2_4.v, uvec3(0, 256, 4), output1_4.v);
 }
 #endif
 
