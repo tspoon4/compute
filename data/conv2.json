@@ -30,7 +30,7 @@
 			"path": "data/conv2/output",
 			"access": "write",
 			"size": 4194304,
-			"comment": "size breakdown: (256*256*16)*4"
+			"comment": "size breakdown: (512*512*4)*4"
 		},
 		{
 			"source": "memory",
@@ -43,8 +43,8 @@
 			"source": "memory",
 			"name": "output2",
 			"type": "buffer",
-			"size": 4734976,
-			"comment": "size breakdown: ((256+8*2) * (256+8*2) * 16) * 4"
+			"size": 4460544,
+			"comment": "size breakdown: ((512+8*2) * (512+8*2) * 4) * 4"
 		},
 		{
 			"source": "memory",
@@ -87,7 +87,7 @@
 		{
 			"name": "unpad2",
 			"path": "data/unpad2.spv",
-			"dispatch": [32, 32, 1]
+			"dispatch": [64, 64, 1]
 		}
 	]
 }
