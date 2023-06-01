@@ -22,10 +22,14 @@
 static const bool VALIDATION_LAYER = true;
 static const bool DEBUG_MARKERS = true;
 static const char *INSTANCE_LAYERS[] = { "VK_LAYER_KHRONOS_validation" };
-static const char *INSTANCE_EXTENSIONS[] = { "VK_KHR_surface",
-					VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-					VK_EXT_DEBUG_REPORT_EXTENSION_NAME };
-static const char *DEVICE_EXTENSIONS[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+static const char *INSTANCE_EXTENSIONS[] = { 
+					VK_KHR_SURFACE_EXTENSION_NAME,
+					VK_EXT_DEBUG_UTILS_EXTENSION_NAME };
+static const char *DEVICE_EXTENSIONS[] = {
+					VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+					VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+					VK_KHR_RAY_QUERY_EXTENSION_NAME,
+					VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
 
 static PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectName = 0;
@@ -147,7 +151,7 @@ int computeCreate(Compute *_compute)
 		appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 		appInfo.pEngineName = "No Engine";
 		appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		appInfo.apiVersion = VK_API_VERSION_1_0;
+		appInfo.apiVersion = VK_API_VERSION_1_3;
 
 		VkInstanceCreateInfo createInfo;
 		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
@@ -198,7 +202,10 @@ int computeCreate(Compute *_compute)
 		{
 			VkPhysicalDeviceProperties deviceProperties;
 			vkGetPhysicalDeviceProperties(physicalDevices[i], &deviceProperties);
-			printf("%d. %s\n", i, deviceProperties.deviceName);
+
+			uint32_t maj = VK_API_VERSION_MAJOR(deviceProperties.apiVersion);
+			uint32_t min = VK_API_VERSION_MINOR(deviceProperties.apiVersion);
+			printf("%d. %s VK_%d_%d\n", i, deviceProperties.deviceName, maj, min);
 		}
 
 		_compute->physicalDevice = physicalDevices[0];
