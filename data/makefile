@@ -3,7 +3,7 @@ SFLAGS = -O -g -fentry-point=main
 
 all: shaders
 
-shaders: test.spv test2.spv sha256.spv pad1.spv conv1.spv unpad1.spv pad2.spv conv2.spv shuffle2.spv unpad2.spv pad3.spv conv3.spv unpad3.spv
+shaders: test.spv test2.spv sha256.spv pad1.spv conv1.spv unpad1.spv pad2.spv conv2.spv shuffle2.spv unpad2.spv pad3.spv conv3.spv unpad3.spv rayquery.spv
 	
 test.spv: test.comp
 	glslc test.comp $(SFLAGS) -o test.spv -DCOPY
@@ -43,6 +43,9 @@ conv3.spv: conv123.comp
 
 unpad3.spv: conv123.comp
 	glslc conv123.comp $(SFLAGS) -o unpad3.spv -DUNPAD3D
+
+rayquery.spv: rayquery.comp
+	glslc rayquery.comp $(SFLAGS) -o rayquery.spv -DRAYTEST
 
 clean:
 	rm -f *.spv
